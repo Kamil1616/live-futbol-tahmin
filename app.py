@@ -36,6 +36,9 @@ ODDS_KEY  = "ac0551df534e175a4f312681465cffcc"
 LS_BASE   = "https://livescore-api.com/api-client"
 ODDS_BASE = "https://api.the-odds-api.com/v4"
 
+# Takip edilecek alt/üst çizgileri
+TOPLAM_CIZGILER = [0.5, 1.5, 2.5, 3.5]
+
 # ── API çağrıları ─────────────────────────────────────────
 
 @st.cache_data(ttl=30)
@@ -74,12 +77,18 @@ def getir_stats(match_id):
 @st.cache_data(ttl=60)
 def getir_odds():
     """
-    Pinnacle'dan soccer h2h oranlarını çek.
-    Döndürür: { "Home Team|Away Team": {"home": x, "draw": x, "away": x} }
+    Pinnacle'dan h2h + totals oranlarını çek.
+    Döndürür:
+    {
+      "Home|Away": {
+        "h2h":    {"home": x, "draw": x, "away": x},
+        "totals":  {0.5: {"over": x, "under": x}, 1.5: {...}, 2.5: {...}, 3.5: {...}}
+      }
+    }
     """
     url = (
         f"{ODDS_BASE}/sports/soccer/odds/"
-        f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h"
+        f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals"
         f"&oddsFormat=decimal&bookmakers=pinnacle"
     )
     try:
@@ -92,31 +101,44 @@ def getir_odds():
                 away_team  = mac.get("away_team", "")
                 bookmakers = mac.get("bookmakers") or []
 
-                # Pinnacle bookmaker'ını bul
                 pinnacle = next((b for b in bookmakers if b.get("key") == "pinnacle"), None)
                 if not pinnacle:
                     continue
 
-                for market in (pinnacle.get("markets") or []):
-                    if market.get("key") != "h2h":
-                        continue
-                    home_price = draw_price = away_price = 0
-                    for outcome in (market.get("outcomes") or []):
-                        name  = outcome.get("name", "")
-                        price = float(outcome.get("price") or 0)
-                        if name == home_team:
-                            home_price = price
-                        elif name == away_team:
-                            away_price = price
-                        elif name == "Draw":
-                            draw_price = price
+                h2h_data    = {"home": 0, "draw": 0, "away": 0}
+                totals_data = {}
 
-                    if home_price and away_price:
-                        sonuc[f"{home_team}|{away_team}"] = {
-                            "home": home_price,
-                            "draw": draw_price,
-                            "away": away_price,
-                        }
+                for market in (pinnacle.get("markets") or []):
+                    key = market.get("key")
+
+                    if key == "h2h":
+                        for outcome in (market.get("outcomes") or []):
+                            name  = outcome.get("name", "")
+                            price = float(outcome.get("price") or 0)
+                            if name == home_team:
+                                h2h_data["home"] = price
+                            elif name == away_team:
+                                h2h_data["away"] = price
+                            elif name == "Draw":
+                                h2h_data["draw"] = price
+
+                    elif key == "totals":
+                        for outcome in (market.get("outcomes") or []):
+                            name  = outcome.get("name", "")   # "Over" veya "Under"
+                            point = outcome.get("point")       # 0.5, 1.5, 2.5, 3.5
+                            price = float(outcome.get("price") or 0)
+                            if point in TOPLAM_CIZGILER:
+                                if point not in totals_data:
+                                    totals_data[point] = {"over": 0, "under": 0}
+                                if name == "Over":
+                                    totals_data[point]["over"] = price
+                                elif name == "Under":
+                                    totals_data[point]["under"] = price
+
+                if h2h_data["home"] or totals_data:
+                    anahtar = f"{home_team}|{away_team}"
+                    sonuc[anahtar] = {"h2h": h2h_data, "totals": totals_data}
+
             return sonuc
         else:
             st.warning(f"Odds API HTTP hatası: {resp.status_code}")
@@ -205,15 +227,20 @@ def sinyal_uret(match, odds_dict):
         competition = (match.get("competition") or {}).get("name", "")
         country     = (match.get("country") or {}).get("name", "")
 
+        # LiveScore maç öncesi 1X2
         ls_pre   = (match.get("odds") or {}).get("pre") or {}
         home_pre = float(ls_pre.get("1") or 0)
         draw_pre = float(ls_pre.get("X") or 0)
         away_pre = float(ls_pre.get("2") or 0)
 
-        live_odds = odds_eslestir(home, away, odds_dict)
-        home_live = live_odds["home"] if live_odds else 0
-        draw_live = live_odds["draw"] if live_odds else 0
-        away_live = live_odds["away"] if live_odds else 0
+        # Pinnacle canlı oranlar
+        eslesen  = odds_eslestir(home, away, odds_dict)
+        h2h_live    = (eslesen or {}).get("h2h") or {}
+        totals_live = (eslesen or {}).get("totals") or {}
+
+        home_live = h2h_live.get("home") or 0
+        draw_live = h2h_live.get("draw") or 0
+        away_live = h2h_live.get("away") or 0
 
         home_chg = pct_change(home_pre, home_live)
         draw_chg = pct_change(draw_pre, draw_live)
@@ -233,16 +260,41 @@ def sinyal_uret(match, odds_dict):
         signals  = []
         priority = 0
 
-        # KURAL 1: Baskı + Pinnacle oran düşüşü (ANA SİNYAL)
+        # ── KURAL 1: Alt/Üst oran sinyalleri (Pinnacle totals) ──
+        # Mevcut gol sayısına göre hangi çizgiler hâlâ açık?
+        # Örn: skor 1-0 ise 0.5 üst zaten geçti, 1.5 üst hâlâ açık
+        for cizgi in TOPLAM_CIZGILER:
+            if cizgi not in totals_live:
+                continue
+            over_price = totals_live[cizgi].get("over") or 0
+            if not over_price:
+                continue
+
+            # Bu çizgi zaten geçildiyse atla
+            if toplam_gol > cizgi:
+                continue
+
+            # Oran ne kadar düştü? (Referans: maç başındaki tipik değerler)
+            # Maç öncesi oran elimizde yok totals için, bu yüzden
+            # mevcut oranın kendisini sinyal eşiği olarak kullan:
+            # over oranı 1.30 altına düştüyse "yakın" demektir
+            if over_price <= 1.25 and min_int >= 60:
+                signals.append((f"🔥 {cizgi} Üst oranı {over_price} — Gol çok yakın! ({min_int}. dak.)", "signal-high"))
+                priority = max(priority, 3)
+            elif over_price <= 1.50 and min_int >= 55:
+                signals.append((f"⚡ {cizgi} Üst oranı {over_price} — Gol beklentisi yüksek ({min_int}. dak.)", "signal-med"))
+                priority = max(priority, 2)
+            elif over_price <= 1.70 and min_int >= 70:
+                signals.append((f"📊 {cizgi} Üst oranı {over_price} — Takip et ({min_int}. dak.)", "signal-med"))
+                priority = max(priority, 2)
+
+        # ── KURAL 2: Baskı + 1X2 oran düşüşü ──
         if min_int >= 60 and home_baski >= 60:
             if home_chg is not None and home_chg <= -7:
                 signals.append((f"🔥 Ev sahibi baskısı ({home_baski}/100) + Pinnacle oranı düştü ({home_chg:+.1f}%) → GÜÇLÜ SİNYAL", "signal-high"))
                 priority = max(priority, 3)
             elif home_chg is not None and home_chg <= -3:
                 signals.append((f"⚡ Ev sahibi baskısı ({home_baski}/100) + oran hafif düştü ({home_chg:+.1f}%)", "signal-med"))
-                priority = max(priority, 2)
-            elif toplam_gol == 0 and min_int >= 70:
-                signals.append((f"⚡ Ev sahibi baskısı ({home_baski}/100) + 70+ dak. golsüz", "signal-med"))
                 priority = max(priority, 2)
             elif min_int >= 75:
                 signals.append((f"⚡ Ev sahibi sürekli baskı yapıyor ({home_baski}/100) — {min_int}. dak.", "signal-med"))
@@ -259,7 +311,7 @@ def sinyal_uret(match, odds_dict):
                 signals.append((f"⚡ Deplasman sürekli baskı yapıyor ({away_baski}/100) — {min_int}. dak.", "signal-med"))
                 priority = max(priority, 2)
 
-        # KURAL 2: 0-0 + geç dakika
+        # ── KURAL 3: 0-0 + geç dakika ──
         if toplam_gol == 0:
             if min_int >= 80:
                 signals.append(("🔥 80+ dak. GOLSÜZ — Güçlü gol beklentisi", "signal-high"))
@@ -268,25 +320,13 @@ def sinyal_uret(match, odds_dict):
                 signals.append(("⚡ 70+ dak. golsüz — Gol sinyali", "signal-med"))
                 priority = max(priority, 2)
 
-        # KURAL 3: Geride kalan takım bastırıyor
+        # ── KURAL 4: Geride kalan takım bastırıyor ──
         if h_gol < a_gol and min_int >= 60 and home_baski >= 55:
             signals.append((f"🔄 Ev sahibi geride ({score}) + baskı ({home_baski}/100) → Geri dönüş beklentisi", "signal-med"))
             priority = max(priority, 2)
         if a_gol < h_gol and min_int >= 60 and away_baski >= 55:
             signals.append((f"🔄 Deplasman geride ({score}) + baskı ({away_baski}/100) → Geri dönüş beklentisi", "signal-med"))
             priority = max(priority, 2)
-
-        # KURAL 4: Sadece oran hareketi (istatistik yoksa)
-        if not stats and live_odds:
-            if home_chg is not None and home_chg <= -12:
-                signals.append((f"📉 Ev sahibi Pinnacle oranı sert düştü: {home_pre} → {home_live} ({home_chg:+.1f}%)", "signal-high"))
-                priority = max(priority, 3)
-            elif home_chg is not None and home_chg <= -6:
-                signals.append((f"📉 Ev sahibi Pinnacle oranı düştü: {home_pre} → {home_live} ({home_chg:+.1f}%)", "signal-med"))
-                priority = max(priority, 2)
-            if away_chg is not None and away_chg <= -12:
-                signals.append((f"📉 Deplasman Pinnacle oranı sert düştü: {away_pre} → {away_live} ({away_chg:+.1f}%)", "signal-high"))
-                priority = max(priority, 3)
 
         if not signals:
             signals.append(("Sinyal yok", "signal-low"))
@@ -296,10 +336,12 @@ def sinyal_uret(match, odds_dict):
             "minute": minute, "competition": competition, "country": country,
             "signals": signals, "priority": priority, "stats": stats,
             "home_baski": home_baski, "away_baski": away_baski,
-            "odds_pre":  {"home": home_pre,  "draw": draw_pre,  "away": away_pre},
-            "odds_live": {"home": home_live, "draw": draw_live, "away": away_live},
-            "odds_chg":  {"home": home_chg,  "draw": draw_chg,  "away": away_chg},
-            "odds_eslesti": live_odds is not None,
+            "odds_pre":    {"home": home_pre, "draw": draw_pre, "away": away_pre},
+            "odds_live":   {"home": home_live, "draw": draw_live, "away": away_live},
+            "odds_chg":    {"home": home_chg, "draw": draw_chg, "away": away_chg},
+            "totals_live": totals_live,
+            "toplam_gol":  toplam_gol,
+            "odds_eslesti": eslesen is not None,
         }
     except Exception as e:
         return {
@@ -307,9 +349,10 @@ def sinyal_uret(match, odds_dict):
             "minute": "?", "competition": "", "country": "",
             "signals": [(f"Veri hatası: {str(e)}", "signal-low")],
             "priority": 0, "stats": {}, "home_baski": 0, "away_baski": 0,
-            "odds_pre":  {"home": 0, "draw": 0, "away": 0},
-            "odds_live": {"home": 0, "draw": 0, "away": 0},
-            "odds_chg":  {"home": None, "draw": None, "away": None},
+            "odds_pre":    {"home": 0, "draw": 0, "away": 0},
+            "odds_live":   {"home": 0, "draw": 0, "away": 0},
+            "odds_chg":    {"home": None, "draw": None, "away": None},
+            "totals_live": {}, "toplam_gol": 0,
             "odds_eslesti": False,
         }
 
@@ -347,6 +390,7 @@ else:
             if data["ht_score"]:
                 st.caption(f"İY: {data['ht_score']}")
 
+            # İstatistikler
             s = data["stats"]
             if s:
                 ph, pa = parse_stat(s.get("possesion"))
@@ -364,6 +408,7 @@ else:
                 )
                 st.caption(f"Baskı → {data['home'][:14]}: {data['home_baski']}/100 | {data['away'][:14]}: {data['away_baski']}/100")
 
+            # 1X2 Oranlar
             op = data["odds_pre"]
             ol = data["odds_live"]
             oc = data["odds_chg"]
@@ -376,9 +421,9 @@ else:
                     return f'<div class="{odds_renk(chg)}"><small>{lbl}</small><br><b>{val:.2f}</b>{chg_str}</div>'
                 st.markdown(
                     f'<div class="odds-row">'
-                    f'{fmt(ol["home"], oc["home"], "1 Pinnacle")}'
-                    f'{fmt(ol["draw"], oc["draw"], "X Pinnacle")}'
-                    f'{fmt(ol["away"], oc["away"], "2 Pinnacle")}'
+                    f'{fmt(ol["home"], oc["home"], "1")}'
+                    f'{fmt(ol["draw"], oc["draw"], "X")}'
+                    f'{fmt(ol["away"], oc["away"], "2")}'
                     f'</div>',
                     unsafe_allow_html=True
                 )
@@ -391,9 +436,35 @@ else:
                     f'</div>',
                     unsafe_allow_html=True
                 )
-            if not has_live:
+
+            # Alt/Üst Oranlar
+            tl = data["totals_live"]
+            tg = data["toplam_gol"]
+            if tl:
+                toplam_satirlari = []
+                for cizgi in TOPLAM_CIZGILER:
+                    if cizgi not in tl:
+                        continue
+                    over  = tl[cizgi].get("over") or 0
+                    under = tl[cizgi].get("under") or 0
+                    gecti = tg > cizgi
+                    etiket = f"{cizgi} Ü" if not gecti else f"✅ {cizgi} Ü"
+                    renk   = "odds-down" if (over > 0 and over <= 1.50) else ""
+                    toplam_satirlari.append(
+                        f'<div class="odds-box {renk}"><small>{etiket}</small><br>'
+                        f'<b>{over:.2f if over else "—"}</b> / {under:.2f if under else "—"}</div>'
+                    )
+                if toplam_satirlari:
+                    st.caption("Alt/Üst (Üst oran / Alt oran) — Pinnacle")
+                    st.markdown(
+                        f'<div class="odds-row">{"".join(toplam_satirlari)}</div>',
+                        unsafe_allow_html=True
+                    )
+
+            if not has_live and not tl:
                 st.caption("⚠️ Pinnacle bu maç için oran vermedi")
 
+            # Sinyaller
             for (sig_text, sig_cls) in data["signals"]:
                 st.markdown(f'<div class="signal {sig_cls}">{sig_text}</div>', unsafe_allow_html=True)
 
@@ -403,4 +474,4 @@ if st.button("🔄 Şimdi Yenile"):
     st.cache_data.clear()
     st.rerun()
 
-st.caption("Veri: livescore-api.com (istatistik) + Pinnacle via the-odds-api.com (canlı oran) • 30 sn yenileme")
+st.caption("Veri: livescore-api.com (istatistik) + Pinnacle via the-odds-api.com (1X2 + Alt/Üst) • 30 sn yenileme")
