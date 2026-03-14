@@ -19,9 +19,12 @@ st.markdown("""
     .stat-home { color: #3fb950; font-weight: bold; }
     .stat-away { color: #f85149; font-weight: bold; }
     .odds-row { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
-    .odds-box { background: #21262d; border-radius: 6px; padding: 5px 10px; text-align: center; flex: 1; font-size: 12px; min-width: 60px; }
+    .odds-box { background: #21262d; border-radius: 6px; padding: 6px 10px; text-align: center; flex: 1; font-size: 12px; min-width: 60px; }
     .odds-down { background: #1a3a1a; color: #3fb950; font-weight: bold; }
     .odds-up   { background: #3a1a1a; color: #f85149; }
+    .total-box { background: #21262d; border-radius: 6px; padding: 8px 10px; text-align: center; flex: 1; font-size: 13px; min-width: 70px; }
+    .total-done { background: #1a3a1a; color: #3fb950; }
+    .total-hot  { background: #2a1f0a; color: #e3b341; font-weight: bold; }
     h1 { color: #58a6ff !important; }
     .stButton > button { background: #238636; color: white; border: none; border-radius: 8px; padding: 8px 20px; }
     .badge { background: #21262d; border-radius: 4px; padding: 2px 8px; font-size: 12px; color: #8b949e; }
@@ -36,7 +39,8 @@ ODDS_KEY  = "ac0551df534e175a4f312681465cffcc"
 LS_BASE   = "https://livescore-api.com/api-client"
 ODDS_BASE = "https://api.the-odds-api.com/v4"
 
-MIN_SINYAL = 15  # Sinyaller kaçıncı dakikadan itibaren üretilsin
+MIN_SINYAL   = 15
+CIZGILER     = [0.5, 1.5, 2.5]  # Gösterilecek alt/üst çizgileri
 
 # ── API çağrıları ─────────────────────────────────────────
 
@@ -75,10 +79,19 @@ def getir_stats(match_id):
 
 @st.cache_data(ttl=15)
 def getir_odds():
+    """
+    Tüm bookmaker'lardan ortalama h2h + totals oranları.
+    Döndürür:
+    {
+      "Home|Away": {
+        "h2h":    {"home": x, "draw": x, "away": x},
+        "totals":  { 0.5: {"over": x, "under": x}, 1.5: {...}, 2.5: {...} }
+      }
+    }
+    """
     url = (
         f"{ODDS_BASE}/sports/soccer/odds/"
-        f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals"
-        f"&oddsFormat=decimal&bookmakers=betsson"
+        f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
     )
     try:
         resp = requests.get(url, timeout=10)
@@ -88,36 +101,63 @@ def getir_odds():
             for mac in maclar:
                 home_team  = mac.get("home_team", "")
                 away_team  = mac.get("away_team", "")
-                pinnacle   = next((b for b in (mac.get("bookmakers") or []) if b.get("key") == "betsson"), None)
-                if not pinnacle:
+                bookmakers = mac.get("bookmakers") or []
+                if not bookmakers:
                     continue
 
-                h2h_data    = {"home": 0, "draw": 0, "away": 0}
-                totals_data = {}
+                # Tüm bookmaker'lardan h2h topla
+                home_prices, draw_prices, away_prices = [], [], []
+                # Totals: her çizgi için fiyatları topla
+                totals_prices = {}  # { 0.5: {"over": [], "under": []}, ... }
 
-                for market in (pinnacle.get("markets") or []):
-                    key = market.get("key")
-                    if key == "h2h":
-                        for o in (market.get("outcomes") or []):
-                            name  = o.get("name", "")
-                            price = float(o.get("price") or 0)
-                            if name == home_team:   h2h_data["home"] = price
-                            elif name == away_team: h2h_data["away"] = price
-                            elif name == "Draw":    h2h_data["draw"] = price
-                    elif key == "totals":
-                        for o in (market.get("outcomes") or []):
-                            name  = o.get("name", "")
-                            point = o.get("point")
-                            price = float(o.get("price") or 0)
-                            if point is not None:
+                for bm in bookmakers:
+                    for market in (bm.get("markets") or []):
+                        key = market.get("key")
+
+                        if key == "h2h":
+                            for o in (market.get("outcomes") or []):
+                                name  = o.get("name", "")
+                                price = float(o.get("price") or 0)
+                                if price <= 0 or price > 200: continue
+                                if name == home_team:   home_prices.append(price)
+                                elif name == away_team: away_prices.append(price)
+                                elif name == "Draw":    draw_prices.append(price)
+
+                        elif key == "totals":
+                            for o in (market.get("outcomes") or []):
+                                name  = o.get("name", "")
+                                point = o.get("point")
+                                price = float(o.get("price") or 0)
+                                if point is None or price <= 0: continue
                                 point = float(point)
-                                if point not in totals_data:
-                                    totals_data[point] = {"over": 0, "under": 0}
-                                if name == "Over":   totals_data[point]["over"]  = price
-                                elif name == "Under": totals_data[point]["under"] = price
+                                # Sadece standart çizgileri al
+                                if point not in CIZGILER: continue
+                                if point not in totals_prices:
+                                    totals_prices[point] = {"over": [], "under": []}
+                                if name == "Over":   totals_prices[point]["over"].append(price)
+                                elif name == "Under": totals_prices[point]["under"].append(price)
 
-                if h2h_data["home"] or totals_data:
-                    sonuc[f"{home_team}|{away_team}"] = {"h2h": h2h_data, "totals": totals_data}
+                if not home_prices:
+                    continue
+
+                # Ortalamaları hesapla
+                h2h_avg = {
+                    "home": round(sum(home_prices) / len(home_prices), 2),
+                    "draw": round(sum(draw_prices) / len(draw_prices), 2) if draw_prices else 0,
+                    "away": round(sum(away_prices) / len(away_prices), 2),
+                }
+                totals_avg = {}
+                for cizgi, ou in totals_prices.items():
+                    if ou["over"] and ou["under"]:
+                        totals_avg[cizgi] = {
+                            "over":  round(sum(ou["over"])  / len(ou["over"]),  2),
+                            "under": round(sum(ou["under"]) / len(ou["under"]), 2),
+                        }
+
+                sonuc[f"{home_team}|{away_team}"] = {
+                    "h2h": h2h_avg,
+                    "totals": totals_avg,
+                }
             return sonuc
         else:
             st.warning(f"Odds API HTTP hatası: {resp.status_code}")
@@ -228,7 +268,6 @@ def sinyal_uret(match, odds_dict):
         signals  = []
         priority = 0
 
-        # Sinyal üretme eşiği
         if min_int < MIN_SINYAL:
             signals.append(("Sinyal yok", "signal-low"))
             return _sonuc(home, away, score, ht_score, minute, competition, country,
@@ -237,11 +276,10 @@ def sinyal_uret(match, odds_dict):
                           home_chg, draw_chg, away_chg, totals_live, toplam_gol, eslesen)
 
         # ── KURAL 1: Alt/Üst oran sinyalleri ──
-        for cizgi in sorted(totals_live.keys()):
-            ou = totals_live[cizgi]
-            over_price = ou.get("over") or 0
-            if not over_price or toplam_gol > cizgi:
-                continue
+        for cizgi in CIZGILER:
+            if cizgi not in totals_live: continue
+            over_price = totals_live[cizgi].get("over") or 0
+            if not over_price or toplam_gol > cizgi: continue
             if over_price <= 1.25:
                 signals.append((f"🔥 {cizgi} Üst oranı {over_price:.2f} — Gol çok yakın! ({min_int}. dak.)", "signal-high"))
                 priority = max(priority, 3)
@@ -340,7 +378,7 @@ if not maclar:
     st.warning("⏳ Şu an aktif canlı maç yok.")
     st.info("Büyük liglerin maç saatlerinde (akşam 18:00–23:00) tekrar dene.")
 else:
-    with st.spinner("Betsson oranları ve istatistikler yükleniyor..."):
+    with st.spinner("Oranlar ve istatistikler yükleniyor..."):
         odds_dict = getir_odds()
         veriler   = [sinyal_uret(m, odds_dict) for m in maclar]
 
@@ -348,7 +386,7 @@ else:
 
     sinyalli = sum(1 for d in veriler if d["priority"] >= 2)
     eslesmis = sum(1 for d in veriler if d["odds_eslesti"])
-    st.success(f"🔴 **{len(veriler)} canlı maç** • 🟢 **{sinyalli} sinyalli** • 📊 **{eslesmis} maçta Betsson oranı eşleşti**")
+    st.success(f"🔴 **{len(veriler)} canlı maç** • 🟢 **{sinyalli} sinyalli** • 📊 **{eslesmis} maçta oran eşleşti**")
 
     cols = st.columns(3)
     for idx, data in enumerate(veriler):
@@ -361,6 +399,7 @@ else:
             if data["ht_score"]:
                 st.caption(f"İY: {data['ht_score']}")
 
+            # İstatistikler
             s = data["stats"]
             if s:
                 ph, pa = parse_stat(s.get("possesion"))
@@ -378,6 +417,7 @@ else:
                 )
                 st.caption(f"Baskı → {data['home'][:14]}: {data['home_baski']}/100 | {data['away'][:14]}: {data['away_baski']}/100")
 
+            # 1X2 Oranlar
             op = data["odds_pre"]
             ol = data["odds_live"]
             oc = data["odds_chg"]
@@ -390,9 +430,9 @@ else:
                     return f'<div class="{odds_renk(chg)}"><small>{lbl}</small><br><b>{val:.2f}</b>{chg_str}</div>'
                 st.markdown(
                     f'<div class="odds-row">'
-                    f'{fmt(ol["home"], oc["home"], "1 Betsson")}'
-                    f'{fmt(ol["draw"], oc["draw"], "X Betsson")}'
-                    f'{fmt(ol["away"], oc["away"], "2 Betsson")}'
+                    f'{fmt(ol["home"], oc["home"], "1")}'
+                    f'{fmt(ol["draw"], oc["draw"], "X")}'
+                    f'{fmt(ol["away"], oc["away"], "2")}'
                     f'</div>', unsafe_allow_html=True
                 )
             if has_pre:
@@ -404,26 +444,49 @@ else:
                     f'</div>', unsafe_allow_html=True
                 )
 
-            tl = data["totals_live"]
-            tg = data["toplam_gol"]
+            # Alt/Üst — her zaman 0.5 / 1.5 / 2.5 göster
+            tl  = data["totals_live"]
+            tg  = data["toplam_gol"]
             if tl:
-                st.caption("⚖️ Alt / Üst — Betsson")
-                satirlar = []
-                for cizgi in sorted(tl.keys()):
-                    over  = tl[cizgi].get("over") or 0
-                    under = tl[cizgi].get("under") or 0
+                st.caption("⚖️ Alt / Üst (ortalama oran)")
+                kutular = []
+                for cizgi in CIZGILER:
                     gecti = tg > cizgi
-                    etiket = f"✅ {cizgi}" if gecti else f"{cizgi}"
-                    renk = "odds-down" if (not gecti and over > 0 and over <= 1.50) else ""
-                    satirlar.append(
-                        f'<div class="odds-box {renk}"><small>{etiket}</small><br>'
-                        f'Ü <b>{over:.2f}</b><br><small>A {under:.2f}</small></div>'
-                    )
-                st.markdown(f'<div class="odds-row">{"".join(satirlar)}</div>', unsafe_allow_html=True)
+                    if gecti:
+                        # Geçilmiş çizgi — yeşil tik
+                        kutular.append(
+                            f'<div class="total-box total-done">'
+                            f'<b>✅ {cizgi} Üst</b><br>'
+                            f'<small>GEÇTİ</small>'
+                            f'</div>'
+                        )
+                    elif cizgi in tl:
+                        over  = tl[cizgi].get("over") or 0
+                        under = tl[cizgi].get("under") or 0
+                        # Düşük oran = sıcak = sarı vurgu
+                        hot = over > 0 and over <= 1.50
+                        renk = "total-hot" if hot else ""
+                        kutular.append(
+                            f'<div class="total-box {renk}">'
+                            f'<small>{cizgi} Üst</small><br>'
+                            f'Ü <b>{over:.2f}</b><br>'
+                            f'<small>A {under:.2f}</small>'
+                            f'</div>'
+                        )
+                    else:
+                        # Veri yok
+                        kutular.append(
+                            f'<div class="total-box">'
+                            f'<small>{cizgi} Üst</small><br>'
+                            f'<small>—</small>'
+                            f'</div>'
+                        )
+                st.markdown(f'<div class="odds-row">{"".join(kutular)}</div>', unsafe_allow_html=True)
 
             if not has_live and not tl:
-                st.caption("⚠️ Betsson bu maç için oran vermedi")
+                st.caption("⚠️ Bu maç için oran bulunamadı")
 
+            # Sinyaller
             for (sig_text, sig_cls) in data["signals"]:
                 st.markdown(f'<div class="signal {sig_cls}">{sig_text}</div>', unsafe_allow_html=True)
 
@@ -433,4 +496,4 @@ if st.button("🔄 Şimdi Yenile"):
     st.cache_data.clear()
     st.rerun()
 
-st.caption("Veri: livescore-api.com (istatistik 10sn) + Betsson via the-odds-api.com (1X2 + Alt/Üst 15sn) • ⚠️ Odds API: 500 istek/ay limiti")
+st.caption("İstatistik: livescore-api.com (10sn) • Oranlar: tüm bookmaker ortalaması (15sn)")
