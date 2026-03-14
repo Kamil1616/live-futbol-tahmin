@@ -15,8 +15,8 @@ st.markdown("""
     .signal-low  { background: #2d333b; color: #8b949e; }
     .stat-row { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
     .stat-box { background: #21262d; border-radius: 6px; padding: 5px 10px; font-size: 12px; text-align: center; flex: 1; min-width: 60px; }
-    .stat-home { background: #1a3a2a; color: #3fb950; font-weight: bold; }
-    .stat-away { background: #3a1a1a; color: #f85149; font-weight: bold; }
+    .stat-home { color: #3fb950; font-weight: bold; }
+    .stat-away { color: #f85149; font-weight: bold; }
     .odds-row { display: flex; gap: 6px; margin: 6px 0; }
     .odds-box { background: #21262d; border-radius: 6px; padding: 5px 10px; text-align: center; flex: 1; font-size: 12px; }
     .odds-down { background: #1a3a1a; color: #3fb950; font-weight: bold; }
@@ -61,13 +61,12 @@ def getir_stats(match_id):
         if resp.status_code == 200:
             data = resp.json()
             if data.get("success"):
-                return data.get("data", {})
+                return data.get("data") or {}
         return {}
     except:
         return {}
 
 def parse_stat(val):
-    """'49:51' gibi string'i (home, away) int tuple'a çevirir."""
     try:
         h, a = str(val).split(":")
         return int(h), int(a)
@@ -81,33 +80,26 @@ def parse_minute(minute):
         return 0
 
 def hesapla_baski(stats, taraf="home"):
-    """
-    Baskı skoru hesapla (0-100 arası).
-    taraf: 'home' veya 'away'
-    """
+    if not stats:
+        return 0
     skor = 0
-
-    # Top hakimiyeti (max 30 puan)
     ph, pa = parse_stat(stats.get("possesion"))
     if ph + pa > 0:
         pos = ph if taraf == "home" else pa
         skor += (pos / 100) * 30
 
-    # İsabetli şut farkı (max 25 puan)
     sh, sa = parse_stat(stats.get("shots_on_target"))
     toplam_sot = sh + sa
     if toplam_sot > 0:
         sot = sh if taraf == "home" else sa
         skor += (sot / toplam_sot) * 25
 
-    # Atak girişimi farkı (max 25 puan)
     ah, aa = parse_stat(stats.get("attempts_on_goal"))
     toplam_atk = ah + aa
     if toplam_atk > 0:
         atk = ah if taraf == "home" else aa
         skor += (atk / toplam_atk) * 25
 
-    # Korner (max 20 puan)
     ch, ca = parse_stat(stats.get("corners"))
     toplam_cor = ch + ca
     if toplam_cor > 0:
@@ -126,8 +118,8 @@ def sinyal_uret(match):
     competition = (match.get("competition") or {}).get("name", "")
     country     = (match.get("country") or {}).get("name", "")
 
-    odds_live = match.get("odds", {}).get("live") or {}
-    odds_pre  = match.get("odds", {}).get("pre")  or {}
+    odds_live = (match.get("odds") or {}).get("live") or {}
+    odds_pre  = (match.get("odds") or {}).get("pre")  or {}
 
     home_live = float(odds_live.get("1") or 0)
     draw_live = float(odds_live.get("X") or 0)
@@ -147,14 +139,10 @@ def sinyal_uret(match):
 
     min_int = parse_minute(minute)
 
-    # İstatistikleri çek
-    stats = getir_stats(match_id) if match_id else {}
-
-    # Baskı skorları
+    stats      = getir_stats(match_id) if match_id else {}
     home_baski = hesapla_baski(stats, "home")
     away_baski = hesapla_baski(stats, "away")
 
-    # Skor parse
     try:
         h_gol, a_gol = map(int, score.replace(" ", "").split("-"))
         toplam_gol   = h_gol + a_gol
@@ -162,10 +150,9 @@ def sinyal_uret(match):
         h_gol, a_gol, toplam_gol = 0, 0, 0
 
     signals  = []
-    priority = 0  # 0=yok 1=düşük 2=orta 3=yüksek
+    priority = 0
 
-    # ── KURAL 1: Baskı + oran hareketi kombinasyonu (ana sinyal) ──
-    # Ev sahibi bastırıyor + oranı düşüyor
+    # KURAL 1: Baskı + oran hareketi kombinasyonu
     if min_int >= 60 and home_baski >= 60:
         if home_chg is not None and home_chg <= -7:
             signals.append((f"🔥 Ev sahibi baskısı ({home_baski}/100) + oran düşüyor → GÜÇLÜ SİNYAL", "signal-high"))
@@ -177,7 +164,6 @@ def sinyal_uret(match):
             signals.append((f"⚡ Ev sahibi baskısı ({home_baski}/100) + golsüz maç", "signal-med"))
             priority = max(priority, 2)
 
-    # Deplasman bastırıyor + oranı düşüyor
     if min_int >= 60 and away_baski >= 60:
         if away_chg is not None and away_chg <= -7:
             signals.append((f"🔥 Deplasman baskısı ({away_baski}/100) + oran düşüyor → GÜÇLÜ SİNYAL", "signal-high"))
@@ -186,16 +172,16 @@ def sinyal_uret(match):
             signals.append((f"⚡ Deplasman baskısı ({away_baski}/100) + oran hafif düşüyor", "signal-med"))
             priority = max(priority, 2)
 
-    # ── KURAL 2: 0-0 + dakika ──
+    # KURAL 2: 0-0 + dakika
     if toplam_gol == 0:
         if min_int >= 80:
-            signals.append((f"🔥 80+ dak. GOLSÜZ — Güçlü gol beklentisi", "signal-high"))
+            signals.append(("🔥 80+ dak. GOLSÜZ — Güçlü gol beklentisi", "signal-high"))
             priority = max(priority, 3)
         elif min_int >= 70:
-            signals.append((f"⚡ 70+ dak. golsüz — Gol sinyali", "signal-med"))
+            signals.append(("⚡ 70+ dak. golsüz — Gol sinyali", "signal-med"))
             priority = max(priority, 2)
 
-    # ── KURAL 3: Sadece oran hareketi (istatistik yoksa bile) ──
+    # KURAL 3: Sadece oran hareketi (istatistik yoksa)
     if not stats:
         if home_chg is not None and home_chg <= -12:
             signals.append((f"📉 Ev sahibi oranı sert düştü: {home_pre} → {home_live} ({home_chg:+.1f}%)", "signal-high"))
@@ -207,7 +193,7 @@ def sinyal_uret(match):
             signals.append((f"📉 Deplasman oranı sert düştü: {away_pre} → {away_live} ({away_chg:+.1f}%)", "signal-high"))
             priority = max(priority, 3)
 
-    # ── KURAL 4: Geride kalan takım baskısı ──
+    # KURAL 4: Geride kalan takım baskısı
     if h_gol < a_gol and min_int >= 60 and home_baski >= 55:
         signals.append((f"🔄 Ev sahibi geride ({score}) + baskı yapıyor ({home_baski}/100)", "signal-med"))
         priority = max(priority, 2)
@@ -290,14 +276,14 @@ else:
 
                 st.markdown(
                     f'<div class="stat-row">'
-                    f'<div class="stat-box">Top<br><b class="{stat_renk(ph,pa,"home")}">{ph}%</b> – <b class="{stat_renk(ph,pa,"away")}">{pa}%</b></div>'
-                    f'<div class="stat-box">İsabetli Şut<br><b class="{stat_renk(sh,sa,"home")}">{sh}</b> – <b class="{stat_renk(sh,sa,"away")}">{sa}</b></div>'
-                    f'<div class="stat-box">Atak<br><b class="{stat_renk(ah,aa,"home")}">{ah}</b> – <b class="{stat_renk(ah,aa,"away")}">{aa}</b></div>'
-                    f'<div class="stat-box">Korner<br><b class="{stat_renk(ch,ca,"home")}">{ch}</b> – <b class="{stat_renk(ch,ca,"away")}">{ca}</b></div>'
+                    f'<div class="stat-box">Top<br><span class="{stat_renk(ph,pa,"home")}">{ph}%</span> – <span class="{stat_renk(ph,pa,"away")}">{pa}%</span></div>'
+                    f'<div class="stat-box">İsabetli Şut<br><span class="{stat_renk(sh,sa,"home")}">{sh}</span> – <span class="{stat_renk(sh,sa,"away")}">{sa}</span></div>'
+                    f'<div class="stat-box">Atak<br><span class="{stat_renk(ah,aa,"home")}">{ah}</span> – <span class="{stat_renk(ah,aa,"away")}">{aa}</span></div>'
+                    f'<div class="stat-box">Korner<br><span class="{stat_renk(ch,ca,"home")}">{ch}</span> – <span class="{stat_renk(ch,ca,"away")}">{ca}</span></div>'
                     f'</div>',
                     unsafe_allow_html=True
                 )
-                st.caption(f"Baskı skoru → {data['home'][:12]}: {data['home_baski']}/100 | {data['away'][:12]}: {data['away_baski']}/100")
+                st.caption(f"Baskı → {data['home'][:14]}: {data['home_baski']}/100 | {data['away'][:14]}: {data['away_baski']}/100")
 
             # Oranlar
             op = data["odds_pre"]
