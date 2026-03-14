@@ -78,7 +78,7 @@ def getir_odds():
     url = (
         f"{ODDS_BASE}/sports/soccer/odds/"
         f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals"
-        f"&oddsFormat=decimal&bookmakers=bet365"
+        f"&oddsFormat=decimal&bookmakers=betsson"
     )
     try:
         resp = requests.get(url, timeout=10)
@@ -88,7 +88,7 @@ def getir_odds():
             for mac in maclar:
                 home_team  = mac.get("home_team", "")
                 away_team  = mac.get("away_team", "")
-                pinnacle   = next((b for b in (mac.get("bookmakers") or []) if b.get("key") == "bet365"), None)
+                pinnacle   = next((b for b in (mac.get("bookmakers") or []) if b.get("key") == "betsson"), None)
                 if not pinnacle:
                     continue
 
@@ -340,7 +340,7 @@ if not maclar:
     st.warning("⏳ Şu an aktif canlı maç yok.")
     st.info("Büyük liglerin maç saatlerinde (akşam 18:00–23:00) tekrar dene.")
 else:
-    with st.spinner("Pinnacle oranları ve istatistikler yükleniyor..."):
+    with st.spinner("Betsson oranları ve istatistikler yükleniyor..."):
         odds_dict = getir_odds()
         veriler   = [sinyal_uret(m, odds_dict) for m in maclar]
 
@@ -348,7 +348,7 @@ else:
 
     sinyalli = sum(1 for d in veriler if d["priority"] >= 2)
     eslesmis = sum(1 for d in veriler if d["odds_eslesti"])
-    st.success(f"🔴 **{len(veriler)} canlı maç** • 🟢 **{sinyalli} sinyalli** • 📊 **{eslesmis} maçta Bet365 oranı eşleşti**")
+    st.success(f"🔴 **{len(veriler)} canlı maç** • 🟢 **{sinyalli} sinyalli** • 📊 **{eslesmis} maçta Betsson oranı eşleşti**")
 
     cols = st.columns(3)
     for idx, data in enumerate(veriler):
@@ -390,9 +390,9 @@ else:
                     return f'<div class="{odds_renk(chg)}"><small>{lbl}</small><br><b>{val:.2f}</b>{chg_str}</div>'
                 st.markdown(
                     f'<div class="odds-row">'
-                    f'{fmt(ol["home"], oc["home"], "1 Bet365")}'
-                    f'{fmt(ol["draw"], oc["draw"], "X Bet365")}'
-                    f'{fmt(ol["away"], oc["away"], "2 Bet365")}'
+                    f'{fmt(ol["home"], oc["home"], "1 Betsson")}'
+                    f'{fmt(ol["draw"], oc["draw"], "X Betsson")}'
+                    f'{fmt(ol["away"], oc["away"], "2 Betsson")}'
                     f'</div>', unsafe_allow_html=True
                 )
             if has_pre:
@@ -407,7 +407,7 @@ else:
             tl = data["totals_live"]
             tg = data["toplam_gol"]
             if tl:
-                st.caption("⚖️ Alt / Üst — Bet365")
+                st.caption("⚖️ Alt / Üst — Betsson")
                 satirlar = []
                 for cizgi in sorted(tl.keys()):
                     over  = tl[cizgi].get("over") or 0
@@ -422,7 +422,7 @@ else:
                 st.markdown(f'<div class="odds-row">{"".join(satirlar)}</div>', unsafe_allow_html=True)
 
             if not has_live and not tl:
-                st.caption("⚠️ Pinnacle bu maç için oran vermedi")
+                st.caption("⚠️ Betsson bu maç için oran vermedi")
 
             for (sig_text, sig_cls) in data["signals"]:
                 st.markdown(f'<div class="signal {sig_cls}">{sig_text}</div>', unsafe_allow_html=True)
@@ -433,4 +433,4 @@ if st.button("🔄 Şimdi Yenile"):
     st.cache_data.clear()
     st.rerun()
 
-st.caption("Veri: livescore-api.com (istatistik 10sn) + Bet365 via the-odds-api.com (1X2 + Alt/Üst 15sn) • ⚠️ Odds API: 500 istek/ay limiti")
+st.caption("Veri: livescore-api.com (istatistik 10sn) + Betsson via the-odds-api.com (1X2 + Alt/Üst 15sn) • ⚠️ Odds API: 500 istek/ay limiti")
