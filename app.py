@@ -40,7 +40,7 @@ MIN_SINYAL = 15  # Sinyaller kaçıncı dakikadan itibaren üretilsin
 
 # ── API çağrıları ─────────────────────────────────────────
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def getir_canli_maclar():
     url = f"{LS_BASE}/matches/live.json?key={LS_KEY}&secret={LS_SECRET}"
     try:
@@ -58,7 +58,7 @@ def getir_canli_maclar():
         st.error(f"Bağlantı sorunu: {str(e)}")
     return []
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=10)
 def getir_stats(match_id):
     try:
         url = f"{LS_BASE}/matches/stats.json?match_id={match_id}&key={LS_KEY}&secret={LS_SECRET}"
@@ -73,12 +73,12 @@ def getir_stats(match_id):
         pass
     return {}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=15)
 def getir_odds():
     url = (
         f"{ODDS_BASE}/sports/soccer/odds/"
         f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals"
-        f"&oddsFormat=decimal&bookmakers=pinnacle"
+        f"&oddsFormat=decimal&bookmakers=bet365"
     )
     try:
         resp = requests.get(url, timeout=10)
@@ -88,7 +88,7 @@ def getir_odds():
             for mac in maclar:
                 home_team  = mac.get("home_team", "")
                 away_team  = mac.get("away_team", "")
-                pinnacle   = next((b for b in (mac.get("bookmakers") or []) if b.get("key") == "pinnacle"), None)
+                pinnacle   = next((b for b in (mac.get("bookmakers") or []) if b.get("key") == "bet365"), None)
                 if not pinnacle:
                     continue
 
@@ -348,7 +348,7 @@ else:
 
     sinyalli = sum(1 for d in veriler if d["priority"] >= 2)
     eslesmis = sum(1 for d in veriler if d["odds_eslesti"])
-    st.success(f"🔴 **{len(veriler)} canlı maç** • 🟢 **{sinyalli} sinyalli** • 📊 **{eslesmis} maçta Pinnacle oranı eşleşti**")
+    st.success(f"🔴 **{len(veriler)} canlı maç** • 🟢 **{sinyalli} sinyalli** • 📊 **{eslesmis} maçta Bet365 oranı eşleşti**")
 
     cols = st.columns(3)
     for idx, data in enumerate(veriler):
@@ -390,9 +390,9 @@ else:
                     return f'<div class="{odds_renk(chg)}"><small>{lbl}</small><br><b>{val:.2f}</b>{chg_str}</div>'
                 st.markdown(
                     f'<div class="odds-row">'
-                    f'{fmt(ol["home"], oc["home"], "1 Pinnacle")}'
-                    f'{fmt(ol["draw"], oc["draw"], "X Pinnacle")}'
-                    f'{fmt(ol["away"], oc["away"], "2 Pinnacle")}'
+                    f'{fmt(ol["home"], oc["home"], "1 Bet365")}'
+                    f'{fmt(ol["draw"], oc["draw"], "X Bet365")}'
+                    f'{fmt(ol["away"], oc["away"], "2 Bet365")}'
                     f'</div>', unsafe_allow_html=True
                 )
             if has_pre:
@@ -407,7 +407,7 @@ else:
             tl = data["totals_live"]
             tg = data["toplam_gol"]
             if tl:
-                st.caption("⚖️ Alt / Üst — Pinnacle")
+                st.caption("⚖️ Alt / Üst — Bet365")
                 satirlar = []
                 for cizgi in sorted(tl.keys()):
                     over  = tl[cizgi].get("over") or 0
@@ -433,4 +433,4 @@ if st.button("🔄 Şimdi Yenile"):
     st.cache_data.clear()
     st.rerun()
 
-st.caption("Veri: livescore-api.com (istatistik) + Pinnacle via the-odds-api.com (1X2 + Alt/Üst) • 30 sn yenileme")
+st.caption("Veri: livescore-api.com (istatistik 10sn) + Bet365 via the-odds-api.com (1X2 + Alt/Üst 15sn) • ⚠️ Odds API: 500 istek/ay limiti")
