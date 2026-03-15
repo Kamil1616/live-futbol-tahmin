@@ -443,19 +443,23 @@ def render(d):
     if tum_cizgiler:
         p.append('<div class="ayrac"></div><div class="bbol">')
         p.append('<div class="bbas">Alt / Üst — Pinnacle vs Piyasa Ort.</div>')
-        p.append('<table class="total-tablo"><thead><tr><th style="text-align:left">Çizgi</th><th>Pinnacle</th><th>Piyasa Ort.</th><th>Durum</th></tr></thead><tbody>')
+        p.append('<table class="total-tablo"><thead><tr><th style="text-align:left">Çizgi</th><th>PIN Üst</th><th>PIN Alt</th><th>Ort. Üst</th><th>Ort. Alt</th></tr></thead><tbody>')
         for cz in tum_cizgiler:
             gecti = d["tg"] > cz
             pin_ov = pin_tl.get(cz,{}).get("over",0)
+            pin_un = pin_tl.get(cz,{}).get("under",0)
             avg_ov = avg_tl.get(cz,{}).get("over",0)
+            avg_un = avg_tl.get(cz,{}).get("under",0)
             if gecti:
-                p.append(f'<tr><td class="cizgi gecti">✅ {cz}</td><td class="oran gecti">GEÇTİ</td><td class="oran gecti">GEÇTİ</td><td class="gecti">✓</td></tr>')
+                p.append(f'<tr><td class="cizgi gecti">✅ {cz}</td><td class="oran gecti" colspan="4">GEÇTİ</td></tr>')
             else:
                 pin_cls = "sicak" if pin_ov and pin_ov<=1.50 else ("dusuk" if pin_ov and pin_ov<=1.70 else "")
                 avg_cls = "sicak" if avg_ov and avg_ov<=1.50 else ("dusuk" if avg_ov and avg_ov<=1.70 else "")
-                pin_str = f"{pin_ov:.2f}" if pin_ov else "—"
-                avg_str = f"{avg_ov:.2f}" if avg_ov else "—"
-                p.append(f'<tr><td class="cizgi">{cz} Üst</td><td class="oran {pin_cls}">{pin_str}</td><td class="oran {avg_cls}">{avg_str}</td><td style="font-size:10px;color:#3a5070">Açık</td></tr>')
+                pin_ov_s = f"{pin_ov:.2f}" if pin_ov else "—"
+                pin_un_s = f"{pin_un:.2f}" if pin_un else "—"
+                avg_ov_s = f"{avg_ov:.2f}" if avg_ov else "—"
+                avg_un_s = f"{avg_un:.2f}" if avg_un else "—"
+                p.append(f'<tr><td class="cizgi">{cz} Üst</td><td class="oran {pin_cls}">{pin_ov_s}</td><td class="oran">{pin_un_s}</td><td class="oran {avg_cls}">{avg_ov_s}</td><td class="oran">{avg_un_s}</td></tr>')
         p.append('</tbody></table></div>')
 
     # Sinyaller
