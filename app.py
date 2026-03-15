@@ -372,8 +372,16 @@ def render(d):
 
         prc = "d" if (pc_ and pc_<=-6) else "y" if (pc_ and pc_>=6) else ""
         brc = "d" if (bc_ and bc_<=-6) else "y" if (bc_ and bc_>=6) else ""
-        pc_txt = f'<div class="oc" style="color:{"#22c55e" if pc_ and pc_<0 else "#ef4444"}">{pc_:+.0f}%</div>' if pc_ is not None else ""
-        bc_txt = f'<div class="oc" style="color:{"#22c55e" if bc_ and bc_<0 else "#ef4444"}">{bc_:+.0f}%</div>' if bc_ is not None else ""
+        if pc_ is not None:
+            pc_clr = "#22c55e" if pc_ < 0 else "#ef4444"
+            pc_txt = f'<div class="oc" style="color:{pc_clr}">{pc_:+.0f}%</div>'
+        else:
+            pc_txt = ""
+        if bc_ is not None:
+            bc_clr = "#22c55e" if bc_ < 0 else "#ef4444"
+            bc_txt = f'<div class="oc" style="color:{bc_clr}">{bc_:+.0f}%</div>'
+        else:
+            bc_txt = ""
 
         pv_str = f"{pv:.2f}" if pv else "—"
         bv_str = f"{bv:.2f}" if bv else "—"
