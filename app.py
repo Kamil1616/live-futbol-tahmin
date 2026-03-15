@@ -2,130 +2,84 @@ import streamlit as st
 import requests
 from difflib import SequenceMatcher
 
-st.set_page_config(page_title="⚽ Canlı Sinyal", layout="wide", page_icon="⚽")
+st.set_page_config(page_title="Canlı Sinyal", layout="wide", page_icon="⚽")
 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
-
 * { box-sizing: border-box; }
-
 .stApp {
     background: #080c12;
     background-image: radial-gradient(ellipse at 20% 0%, #0d2137 0%, transparent 50%),
                       radial-gradient(ellipse at 80% 100%, #091a0e 0%, transparent 50%);
-    color: #e2e8f0;
-    font-family: 'Inter', sans-serif;
+    color: #e2e8f0; font-family: 'Inter', sans-serif;
 }
-
-h1 { font-family: 'Rajdhani', sans-serif !important; font-size: 2rem !important;
-     letter-spacing: 2px; color: #fff !important; margin-bottom: 0 !important; }
-
-.header-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 0; border-bottom: 1px solid #1e2d3d; margin-bottom: 20px;
-}
-.live-dot { width:8px; height:8px; border-radius:50%; background:#ef4444;
-            display:inline-block; margin-right:6px;
-            box-shadow: 0 0 8px #ef4444; animation: pulse 1.5s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-/* KART */
 .mac-karti {
     background: linear-gradient(135deg, #0f1923 0%, #111d2b 100%);
-    border: 1px solid #1e2d3d;
-    border-radius: 16px;
-    padding: 0;
-    margin-bottom: 16px;
-    overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid #1e2d3d; border-radius: 16px;
+    margin-bottom: 16px; overflow: hidden;
 }
-.mac-karti:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
-.mac-karti.sinyal-yuksek { border-color: #22c55e; box-shadow: 0 0 20px rgba(34,197,94,0.2); }
-.mac-karti.sinyal-orta   { border-color: #f97316; box-shadow: 0 0 16px rgba(249,115,22,0.15); }
-
-.kart-ust {
-    padding: 14px 16px 10px;
-    border-bottom: 1px solid #1e2d3d;
-    display: flex; justify-content: space-between; align-items: center;
-}
-.lig-adi { font-size: 11px; color: #64748b; letter-spacing: 1px; text-transform: uppercase; }
-.dakika-badge {
-    background: #ef4444; color: white; font-size: 11px; font-weight: 700;
-    padding: 2px 8px; border-radius: 20px; font-family: 'Rajdhani', sans-serif;
-    letter-spacing: 1px;
-}
-
-.kart-orta { padding: 12px 16px; }
-.takim-adi { font-family: 'Rajdhani', sans-serif; font-size: 17px; font-weight: 700;
-             color: #f1f5f9; line-height: 1.2; }
-.skor-blok { display:flex; align-items:center; gap:12px; margin-top:8px; }
-.skor { font-family: 'Rajdhani', sans-serif; font-size: 28px; font-weight: 700; color:#fff; }
-.iy-skor { font-size: 11px; color: #475569; }
-
-/* İSTATİSTİK */
-.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:10px 0; }
-.stat-item { background:#0a1520; border-radius:8px; padding:8px 6px; text-align:center; }
-.stat-label { font-size:10px; color:#475569; margin-bottom:4px; }
-.stat-val { font-size:13px; font-weight:600; }
-.ev { color:#22c55e; }
-.dep { color:#ef4444; }
-.esit { color:#94a3b8; }
-.baski-bar { height:4px; border-radius:2px; background:#1e2d3d; margin:8px 0 4px; overflow:hidden; }
-.baski-fill { height:100%; background:linear-gradient(90deg,#22c55e,#16a34a); border-radius:2px; }
-
-/* ORANLAR */
-.oran-bolum { padding:10px 16px; border-top:1px solid #1e2d3d; }
-.oran-baslik { font-size:10px; color:#475569; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
-.oran-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-.oran-kutu { background:#0a1520; border-radius:8px; padding:8px 4px; text-align:center; border:1px solid #1e2d3d; }
-.oran-kutu.dusus { background:#0d2010; border-color:#22c55e; }
-.oran-kutu.yukselis { background:#200d0d; border-color:#ef4444; }
-.oran-label { font-size:10px; color:#475569; }
-.oran-deger { font-size:15px; font-weight:700; font-family:'Rajdhani',sans-serif; color:#f1f5f9; }
-.oran-deger.dusus { color:#22c55e; }
-.oran-deger.yukselis { color:#ef4444; }
-.oran-degisim { font-size:10px; margin-top:1px; }
-.bm-etiket { font-size:9px; color:#334155; letter-spacing:0.5px; margin-top:2px; }
-
-/* TOTALS */
-.total-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px; }
-.total-kutu { background:#0a1520; border-radius:8px; padding:8px 6px; text-align:center; border:1px solid #1e2d3d; }
-.total-kutu.gecti { background:#0d2010; border-color:#22c55e; }
-.total-kutu.sicak { background:#1a1200; border-color:#eab308; }
-.total-cizgi { font-size:12px; font-weight:700; font-family:'Rajdhani',sans-serif; color:#94a3b8; }
-.total-cizgi.gecti { color:#22c55e; }
-.total-over { font-size:14px; font-weight:700; color:#f1f5f9; margin:2px 0; }
-.total-under { font-size:10px; color:#475569; }
-
-/* SİNYAL */
-.sinyal-bolum { padding:10px 16px 14px; border-top:1px solid #1e2d3d; }
-.sinyal-item { border-radius:8px; padding:8px 12px; margin-bottom:5px; font-size:13px; font-weight:600; }
-.sinyal-high { background:linear-gradient(135deg,#14532d,#166534); color:#86efac; border:1px solid #22c55e; }
-.sinyal-med  { background:linear-gradient(135deg,#431407,#7c2d12); color:#fdba74; border:1px solid #f97316; }
-.sinyal-low  { background:#0f172a; color:#475569; border:1px solid #1e293b; }
-
+.mac-karti.sy { border-color: #22c55e; box-shadow: 0 0 20px rgba(34,197,94,0.2); }
+.mac-karti.so { border-color: #f97316; box-shadow: 0 0 16px rgba(249,115,22,0.15); }
+.kust { padding: 12px 16px 10px; border-bottom: 1px solid #1e2d3d;
+        display: flex; justify-content: space-between; align-items: center; }
+.lig { font-size: 11px; color: #64748b; letter-spacing: 1px; text-transform: uppercase; }
+.dak { background: #ef4444; color: white; font-size: 11px; font-weight: 700;
+       padding: 2px 10px; border-radius: 20px; font-family: 'Rajdhani', sans-serif; }
+.korta { padding: 12px 16px; }
+.tadi { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 700; color: #f1f5f9; }
+.tadi2 { font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 600; color: #64748b; }
+.skor { font-family: 'Rajdhani', sans-serif; font-size: 30px; font-weight: 700; color: #fff; }
+.iyskor { font-size: 11px; color: #475569; text-align: right; }
+.sgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin: 10px 0 6px; }
+.si { background: #0a1520; border-radius: 8px; padding: 8px 4px; text-align: center; }
+.sl { font-size: 9px; color: #475569; margin-bottom: 3px; letter-spacing: 0.5px; }
+.sv { font-size: 13px; font-weight: 600; }
+.ev { color: #22c55e; } .dep { color: #ef4444; } .esit { color: #94a3b8; }
+.bbar { height: 3px; background: #1e2d3d; border-radius: 2px; margin: 4px 0 2px; overflow: hidden; }
+.bfill { height: 100%; background: linear-gradient(90deg,#22c55e,#16a34a); border-radius: 2px; }
+.btext { font-size: 10px; color: #334155; margin-bottom: 4px; }
+.obol { padding: 10px 16px; border-top: 1px solid #1e2d3d; }
+.obas { font-size: 10px; color: #475569; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+.ogrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+.ok { background: #0a1520; border-radius: 8px; padding: 8px 4px; text-align: center; border: 1px solid #1e2d3d; }
+.ok.d { background: #0d2010; border-color: #22c55e; }
+.ok.y { background: #200d0d; border-color: #ef4444; }
+.ol { font-size: 10px; color: #475569; }
+.od { font-size: 15px; font-weight: 700; font-family: 'Rajdhani',sans-serif; color: #f1f5f9; }
+.od.d { color: #22c55e; } .od.y { color: #ef4444; }
+.oc { font-size: 10px; margin-top: 1px; }
+.tgrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-top: 6px; }
+.tk { background: #0a1520; border-radius: 8px; padding: 8px 6px; text-align: center; border: 1px solid #1e2d3d; }
+.tk.g { background: #0d2010; border-color: #22c55e; }
+.tk.s { background: #1a1200; border-color: #eab308; }
+.tc { font-size: 12px; font-weight: 700; font-family: 'Rajdhani',sans-serif; color: #64748b; }
+.tc.g { color: #22c55e; }
+.to { font-size: 14px; font-weight: 700; color: #f1f5f9; margin: 2px 0; }
+.tu { font-size: 10px; color: #475569; }
+.sbol { padding: 10px 16px 14px; border-top: 1px solid #1e2d3d; }
+.sh { background: linear-gradient(135deg,#14532d,#166534); color: #86efac;
+      border: 1px solid #22c55e; border-radius: 8px; padding: 8px 12px;
+      margin-bottom: 5px; font-size: 13px; font-weight: 600; }
+.sm { background: linear-gradient(135deg,#431407,#7c2d12); color: #fdba74;
+      border: 1px solid #f97316; border-radius: 8px; padding: 8px 12px;
+      margin-bottom: 5px; font-size: 13px; font-weight: 600; }
+.sl2 { background: #0f172a; color: #475569; border: 1px solid #1e293b;
+       border-radius: 8px; padding: 8px 12px; margin-bottom: 5px; font-size: 13px; }
 .stButton>button {
-    background:linear-gradient(135deg,#1d4ed8,#1e40af) !important;
-    color:white !important; border:none !important; border-radius:10px !important;
-    padding:10px 24px !important; font-weight:600 !important; letter-spacing:0.5px !important;
+    background: linear-gradient(135deg,#1d4ed8,#1e40af) !important;
+    color: white !important; border: none !important; border-radius: 10px !important;
+    padding: 10px 24px !important; font-weight: 600 !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Başlık
 st.markdown("""
-<div class="header-bar">
-  <div style="display:flex;align-items:center;gap:10px">
-    <span style="font-size:1.8rem">⚽</span>
-    <div>
-      <div style="font-family:'Rajdhani',sans-serif;font-size:1.5rem;font-weight:700;letter-spacing:2px;color:#fff">
-        CANLI SİNYAL
-      </div>
-      <div style="font-size:11px;color:#475569;letter-spacing:1px">
-        Pinnacle + Betfair • Canlı Oran & İstatistik
-      </div>
-    </div>
+<div style="display:flex;align-items:center;gap:10px;padding:12px 0 20px;border-bottom:1px solid #1e2d3d;margin-bottom:20px">
+  <span style="font-size:2rem">⚽</span>
+  <div>
+    <div style="font-family:'Rajdhani',sans-serif;font-size:1.6rem;font-weight:700;letter-spacing:2px;color:#fff">CANLI SİNYAL</div>
+    <div style="font-size:11px;color:#475569;letter-spacing:1px">Pinnacle + Betfair • Canlı Oran ve İstatistik</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -135,13 +89,9 @@ LS_SECRET = "C7b6mK3wocmicEDxhD44zqYfWhF3we19"
 ODDS_KEY  = "ac0551df534e175a4f312681465cffcc"
 LS_BASE   = "https://livescore-api.com/api-client"
 ODDS_BASE = "https://api.the-odds-api.com/v4"
-
 MIN_SINYAL = 15
 CIZGILER   = [0.5, 1.5, 2.5]
-BOOKMAKERS = ["pinnacle", "betfair_ex_eu"]
-BM_ETIKET  = {"pinnacle": "Pinnacle", "betfair_ex_eu": "Betfair"}
-
-# ── API ───────────────────────────────────────────────────
+BOOKMAKERS = [("pinnacle","Pinnacle"), ("betfair_ex_eu","Betfair")]
 
 @st.cache_data(ttl=60)
 def getir_canli_maclar():
@@ -153,11 +103,7 @@ def getir_canli_maclar():
             if data.get("success"):
                 maclar = (data.get("data") or {}).get("match") or []
                 return [m for m in maclar if m.get("status") == "IN PLAY"]
-            st.error(f"LiveScore hatası: {data.get('error','?')}")
-        else:
-            st.error(f"LiveScore HTTP: {resp.status_code}")
-    except Exception as e:
-        st.error(f"Bağlantı: {str(e)}")
+    except: pass
     return []
 
 @st.cache_data(ttl=10)
@@ -175,100 +121,73 @@ def getir_stats(match_id):
 
 @st.cache_data(ttl=15)
 def getir_odds():
-    """
-    Pinnacle + Betfair için ayrı ayrı h2h + totals.
-    Döndürür:
-    {
-      "Home|Away": {
-        "pinnacle":      { "h2h": {...}, "totals": {...} },
-        "betfair_ex_eu": { "h2h": {...}, "totals": {...} },
-      }
-    }
-    """
-    url = (
-        f"{ODDS_BASE}/sports/soccer/odds/"
-        f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
-        f"&bookmakers=pinnacle,betfair_ex_eu"
-    )
+    url = (f"{ODDS_BASE}/sports/soccer/odds/"
+           f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
+           f"&bookmakers=pinnacle,betfair_ex_eu")
     try:
         resp = requests.get(url, timeout=10)
-        if resp.status_code != 200:
-            return {}
-        maclar = resp.json()
+        if resp.status_code != 200: return {}
         sonuc = {}
-        for mac in maclar:
-            home_team  = mac.get("home_team","")
-            away_team  = mac.get("away_team","")
-            bms        = mac.get("bookmakers") or []
+        for mac in resp.json():
+            ht = mac.get("home_team","")
+            at = mac.get("away_team","")
+            bms = mac.get("bookmakers") or []
             if not bms: continue
-
             mac_data = {}
             for bm in bms:
-                bm_key = bm.get("key","")
-                if bm_key not in BOOKMAKERS: continue
-
-                h2h_d    = {"home":0,"draw":0,"away":0}
-                totals_d = {}
-
-                for market in (bm.get("markets") or []):
-                    mk = market.get("key")
+                bk = bm.get("key","")
+                if bk not in [b[0] for b in BOOKMAKERS]: continue
+                h2h = {"home":0,"draw":0,"away":0}
+                tots = {}
+                for mkt in (bm.get("markets") or []):
+                    mk = mkt.get("key")
                     if mk == "h2h":
-                        for o in (market.get("outcomes") or []):
-                            name  = o.get("name","")
-                            price = float(o.get("price") or 0)
-                            if price <= 0 or price > 500: continue
-                            if name == home_team:   h2h_d["home"] = price
-                            elif name == away_team: h2h_d["away"] = price
-                            elif name == "Draw":    h2h_d["draw"] = price
+                        for o in (mkt.get("outcomes") or []):
+                            nm = o.get("name",""); pr = float(o.get("price") or 0)
+                            if pr<=0 or pr>500: continue
+                            if nm==ht: h2h["home"]=pr
+                            elif nm==at: h2h["away"]=pr
+                            elif nm=="Draw": h2h["draw"]=pr
                     elif mk == "totals":
-                        for o in (market.get("outcomes") or []):
-                            name  = o.get("name","")
-                            point = o.get("point")
-                            price = float(o.get("price") or 0)
-                            if point is None or price <= 0: continue
-                            point = float(point)
-                            if point not in CIZGILER: continue
-                            if point not in totals_d:
-                                totals_d[point] = {"over":0,"under":0}
-                            if name == "Over":    totals_d[point]["over"]  = price
-                            elif name == "Under": totals_d[point]["under"] = price
-
-                if h2h_d["home"] or totals_d:
-                    mac_data[bm_key] = {"h2h": h2h_d, "totals": totals_d}
-
+                        for o in (mkt.get("outcomes") or []):
+                            nm = o.get("name",""); pt = o.get("point"); pr = float(o.get("price") or 0)
+                            if pt is None or pr<=0: continue
+                            pt = float(pt)
+                            if pt not in CIZGILER: continue
+                            if pt not in tots: tots[pt] = {"over":0,"under":0}
+                            if nm=="Over": tots[pt]["over"]=pr
+                            elif nm=="Under": tots[pt]["under"]=pr
+                if h2h["home"] or tots:
+                    mac_data[bk] = {"h2h":h2h,"totals":tots}
             if mac_data:
-                sonuc[f"{home_team}|{away_team}"] = mac_data
+                sonuc[f"{ht}|{at}"] = mac_data
         return sonuc
-    except Exception as e:
-        return {}
-
-# ── Yardımcılar ───────────────────────────────────────────
+    except: return {}
 
 def benzerlik(a,b):
     return SequenceMatcher(None,a.lower(),b.lower()).ratio()
 
-def odds_eslestir(home,away,odds_dict):
-    en_iyi,en_skor=None,0.6
-    for anahtar,odds in odds_dict.items():
-        p=anahtar.split("|")
+def eslestir(home,away,odds_dict):
+    en,sk = None, 0.6
+    for k,v in odds_dict.items():
+        p = k.split("|")
         if len(p)!=2: continue
-        oh,oa=p
-        s=(benzerlik(home,oh)+benzerlik(away,oa))/2
-        if s>en_skor: en_skor=s; en_iyi=odds
-    return en_iyi
+        s = (benzerlik(home,p[0])+benzerlik(away,p[1]))/2
+        if s>sk: sk=s; en=v
+    return en
 
 def parse_stat(val):
     try:
         if val is None: return 0,0
-        h,a=str(val).split(":")
+        h,a = str(val).split(":")
         return int(h),int(a)
     except: return 0,0
 
-def parse_minute(minute):
-    try: return int(str(minute).replace('+',' ').split()[0])
+def parse_min(m):
+    try: return int(str(m).replace("+"," ").split()[0])
     except: return 0
 
-def hesapla_baski(stats,taraf="home"):
+def baski(stats,taraf):
     if not stats or not isinstance(stats,dict): return 0
     s=0.0
     ph,pa=parse_stat(stats.get("possesion"))
@@ -286,374 +205,229 @@ def pct(pre,live):
         return round((live-pre)/pre*100,1)
     return None
 
-def oran_renk_cls(chg):
-    if chg is None: return ""
-    if chg<=-6: return "dusus"
-    if chg>=6:  return "yukselis"
-    return ""
-
-# ── Sinyal üretimi ────────────────────────────────────────
+def sr(h,a,t):
+    if t=="home": return "ev" if h>a else ("dep" if h<a else "esit")
+    return "ev" if a>h else ("dep" if a<h else "esit")
 
 def sinyal_uret(match, odds_dict):
     try:
-        match_id    = match.get("id")
-        home        = (match.get("home") or {}).get("name","Ev Sahibi")
-        away        = (match.get("away") or {}).get("name","Deplasman")
-        score       = (match.get("scores") or {}).get("score","? - ?")
-        ht_score    = (match.get("scores") or {}).get("ht_score","")
-        minute      = match.get("time","?")
-        competition = (match.get("competition") or {}).get("name","")
-        country     = (match.get("country") or {}).get("name","")
+        mid  = match.get("id")
+        home = (match.get("home") or {}).get("name","Ev Sahibi")
+        away = (match.get("away") or {}).get("name","Deplasman")
+        scr  = (match.get("scores") or {}).get("score","? - ?")
+        hts  = (match.get("scores") or {}).get("ht_score","")
+        mn   = match.get("time","?")
+        comp = (match.get("competition") or {}).get("name","")
+        cntry= (match.get("country") or {}).get("name","")
+        lspre= (match.get("odds") or {}).get("pre") or {}
+        hp   = float(lspre.get("1") or 0)
+        dp   = float(lspre.get("X") or 0)
+        ap   = float(lspre.get("2") or 0)
 
-        ls_pre   = (match.get("odds") or {}).get("pre") or {}
-        home_pre = float(ls_pre.get("1") or 0)
-        draw_pre = float(ls_pre.get("X") or 0)
-        away_pre = float(ls_pre.get("2") or 0)
+        esl  = eslestir(home,away,odds_dict)
+        bmo  = {}
+        for bk,_ in BOOKMAKERS:
+            bd   = (esl or {}).get(bk) or {}
+            h2h  = bd.get("h2h") or {}
+            tots = bd.get("totals") or {}
+            hl=h2h.get("home") or 0; dl=h2h.get("draw") or 0; al=h2h.get("away") or 0
+            bmo[bk] = {"home":hl,"draw":dl,"away":al,
+                       "hc":pct(hp,hl),"dc":pct(dp,dl),"ac":pct(ap,al),"totals":tots}
 
-        eslesen = odds_eslestir(home,away,odds_dict)
+        # Sinyal için Pinnacle ref
+        pin = bmo.get("pinnacle",{})
+        hc  = pin.get("hc"); ac = pin.get("ac")
+        tl  = pin.get("totals") or {}
+        if not tl:
+            for bk,_ in BOOKMAKERS:
+                if bmo[bk].get("totals"): tl=bmo[bk]["totals"]; break
 
-        # Her bookmaker için ayrı oran al
-        bm_oranlar = {}
-        for bm_key in BOOKMAKERS:
-            bm_data = (eslesen or {}).get(bm_key) or {}
-            h2h = bm_data.get("h2h") or {}
-            tot = bm_data.get("totals") or {}
-            hl = h2h.get("home") or 0
-            dl = h2h.get("draw") or 0
-            al = h2h.get("away") or 0
-            bm_oranlar[bm_key] = {
-                "home": hl, "draw": dl, "away": al,
-                "home_chg": pct(home_pre,hl),
-                "draw_chg": pct(draw_pre,dl),
-                "away_chg": pct(away_pre,al),
-                "totals": tot,
-            }
-
-        # Sinyal için Pinnacle oranlarını ana referans al
-        pin = bm_oranlar.get("pinnacle",{})
-        home_chg = pin.get("home_chg")
-        away_chg = pin.get("away_chg")
-        totals_live = pin.get("totals") or {}
-        # Betfair yoksa Pinnacle totals kullan
-        for bm_key in BOOKMAKERS:
-            if bm_oranlar[bm_key].get("totals"):
-                totals_live = bm_oranlar[bm_key]["totals"]
-                break
-
-        min_int    = parse_minute(minute)
-        stats      = getir_stats(match_id) if match_id else {}
-        home_baski = hesapla_baski(stats,"home")
-        away_baski = hesapla_baski(stats,"away")
+        mint = parse_min(mn)
+        st_d = getir_stats(mid) if mid else {}
+        hb   = baski(st_d,"home"); ab = baski(st_d,"away")
 
         try:
-            h_gol,a_gol = map(int,score.replace(" ","").split("-"))
-            toplam_gol  = h_gol+a_gol
-        except:
-            h_gol,a_gol,toplam_gol = 0,0,0
+            hg,ag = map(int,scr.replace(" ","").split("-")); tg=hg+ag
+        except: hg=ag=tg=0
 
-        signals  = []
-        priority = 0
+        sigs=[]; pri=0
 
-        if min_int < MIN_SINYAL:
-            signals.append(("Sinyal yok","sinyal-low"))
+        if mint < MIN_SINYAL:
+            sigs.append(("Sinyal yok","sl2"))
         else:
-            # Totals sinyali
-            for cizgi in CIZGILER:
-                if cizgi not in totals_live or toplam_gol>cizgi: continue
-                op = totals_live[cizgi].get("over") or 0
-                if not op: continue
-                if op<=1.25:
-                    signals.append((f"🔥 {cizgi} Üst oranı {op:.2f} — Gol çok yakın! ({min_int}. dak.)","sinyal-high"))
-                    priority=max(priority,3)
-                elif op<=1.45:
-                    signals.append((f"⚡ {cizgi} Üst {op:.2f} — Gol beklentisi yüksek ({min_int}. dak.)","sinyal-med"))
-                    priority=max(priority,2)
-                elif op<=1.65 and min_int>=60:
-                    signals.append((f"📊 {cizgi} Üst {op:.2f} — Takip et ({min_int}. dak.)","sinyal-med"))
-                    priority=max(priority,2)
+            for cz in CIZGILER:
+                if cz not in tl or tg>cz: continue
+                ov = tl[cz].get("over") or 0
+                if not ov: continue
+                if ov<=1.25:
+                    sigs.append((f"🔥 {cz} Üst {ov:.2f} — Gol çok yakın! ({mint}. dak.)","sh"))
+                    pri=max(pri,3)
+                elif ov<=1.45:
+                    sigs.append((f"⚡ {cz} Üst {ov:.2f} — Gol beklentisi yüksek ({mint}. dak.)","sm"))
+                    pri=max(pri,2)
+                elif ov<=1.65 and mint>=60:
+                    sigs.append((f"📊 {cz} Üst {ov:.2f} — Takip et ({mint}. dak.)","sm"))
+                    pri=max(pri,2)
 
-            # 1X2 oran düşüşü
-            if home_chg is not None and home_chg<=-20:
-                signals.append((f"🔥 Ev sahibi oranı sert düştü: {home_pre:.2f}→{pin['home']:.2f} ({home_chg:+.1f}%)","sinyal-high"))
-                priority=max(priority,3)
-            elif home_chg is not None and home_chg<=-10:
-                signals.append((f"📉 Ev sahibi oranı düştü: {home_pre:.2f}→{pin['home']:.2f} ({home_chg:+.1f}%)","sinyal-med"))
-                priority=max(priority,2)
+            hl2=pin.get("home") or 0; al2=pin.get("away") or 0
+            if hc is not None and hc<=-20:
+                sigs.append((f"🔥 Ev sahibi oranı sert düştü: {hp:.2f} → {hl2:.2f} ({hc:+.1f}%)","sh")); pri=max(pri,3)
+            elif hc is not None and hc<=-10:
+                sigs.append((f"📉 Ev sahibi oranı düştü: {hp:.2f} → {hl2:.2f} ({hc:+.1f}%)","sm")); pri=max(pri,2)
+            if ac is not None and ac<=-20:
+                sigs.append((f"🔥 Deplasman oranı sert düştü: {ap:.2f} → {al2:.2f} ({ac:+.1f}%)","sh")); pri=max(pri,3)
+            elif ac is not None and ac<=-10:
+                sigs.append((f"📉 Deplasman oranı düştü: {ap:.2f} → {al2:.2f} ({ac:+.1f}%)","sm")); pri=max(pri,2)
 
-            if away_chg is not None and away_chg<=-20:
-                signals.append((f"🔥 Deplasman oranı sert düştü: {away_pre:.2f}→{pin['away']:.2f} ({away_chg:+.1f}%)","sinyal-high"))
-                priority=max(priority,3)
-            elif away_chg is not None and away_chg<=-10:
-                signals.append((f"📉 Deplasman oranı düştü: {away_pre:.2f}→{pin['away']:.2f} ({away_chg:+.1f}%)","sinyal-med"))
-                priority=max(priority,2)
+            if hb>=60:
+                if hc is not None and hc<=-7:
+                    sigs.append((f"🔥 Ev sahibi baskı ({hb}/100) + oran düştü → GÜÇLÜ SİNYAL","sh")); pri=max(pri,3)
+                elif mint>=60:
+                    sigs.append((f"⚡ Ev sahibi baskı yapıyor ({hb}/100) — {mint}. dak.","sm")); pri=max(pri,2)
+            if ab>=60:
+                if ac is not None and ac<=-7:
+                    sigs.append((f"🔥 Deplasman baskı ({ab}/100) + oran düştü → GÜÇLÜ SİNYAL","sh")); pri=max(pri,3)
+                elif mint>=60:
+                    sigs.append((f"⚡ Deplasman baskı yapıyor ({ab}/100) — {mint}. dak.","sm")); pri=max(pri,2)
 
-            # Baskı
-            if home_baski>=60:
-                if home_chg is not None and home_chg<=-7:
-                    signals.append((f"🔥 Ev sahibi baskı ({home_baski}/100) + oran düştü → GÜÇLÜ SİNYAL","sinyal-high"))
-                    priority=max(priority,3)
-                elif min_int>=60:
-                    signals.append((f"⚡ Ev sahibi baskı yapıyor ({home_baski}/100) — {min_int}. dak.","sinyal-med"))
-                    priority=max(priority,2)
+            if tg==0:
+                if mint>=80: sigs.append(("🔥 80+ dak. GOLSÜZ — Güçlü gol beklentisi","sh")); pri=max(pri,3)
+                elif mint>=70: sigs.append(("⚡ 70+ dak. golsüz — Gol sinyali","sm")); pri=max(pri,2)
+                elif mint>=15: sigs.append((f"📊 {mint}. dak. golsüz","sl2")); pri=max(pri,1)
 
-            if away_baski>=60:
-                if away_chg is not None and away_chg<=-7:
-                    signals.append((f"🔥 Deplasman baskı ({away_baski}/100) + oran düştü → GÜÇLÜ SİNYAL","sinyal-high"))
-                    priority=max(priority,3)
-                elif min_int>=60:
-                    signals.append((f"⚡ Deplasman baskı yapıyor ({away_baski}/100) — {min_int}. dak.","sinyal-med"))
-                    priority=max(priority,2)
+            if hg<ag and hb>=55 and mint>=45:
+                sigs.append((f"🔄 Ev sahibi geride ({scr}) + baskı ({hb}/100)","sm")); pri=max(pri,2)
+            if ag<hg and ab>=55 and mint>=45:
+                sigs.append((f"🔄 Deplasman geride ({scr}) + baskı ({ab}/100)","sm")); pri=max(pri,2)
 
-            # Golsüz
-            if toplam_gol==0:
-                if min_int>=80:
-                    signals.append(("🔥 80+ dak. GOLSÜZ — Güçlü gol beklentisi","sinyal-high"))
-                    priority=max(priority,3)
-                elif min_int>=70:
-                    signals.append(("⚡ 70+ dak. golsüz — Gol sinyali","sinyal-med"))
-                    priority=max(priority,2)
-                elif min_int>=15:
-                    signals.append((f"📊 {min_int}. dak. golsüz","sinyal-low"))
-                    priority=max(priority,1)
+            if not sigs: sigs.append(("Sinyal yok","sl2"))
 
-            # Geride + baskı
-            if h_gol<a_gol and home_baski>=55 and min_int>=45:
-                signals.append((f"🔄 Ev sahibi geride ({score}) + baskı ({home_baski}/100)","sinyal-med"))
-                priority=max(priority,2)
-            if a_gol<h_gol and away_baski>=55 and min_int>=45:
-                signals.append((f"🔄 Deplasman geride ({score}) + baskı ({away_baski}/100)","sinyal-med"))
-                priority=max(priority,2)
-
-            if not signals:
-                signals.append(("Sinyal yok","sinyal-low"))
-
-        return {
-            "home":home,"away":away,"score":score,"ht_score":ht_score,
-            "minute":minute,"competition":competition,"country":country,
-            "signals":signals,"priority":priority,"stats":stats,
-            "home_baski":home_baski,"away_baski":away_baski,
-            "home_pre":home_pre,"draw_pre":draw_pre,"away_pre":away_pre,
-            "bm_oranlar":bm_oranlar,"totals_live":totals_live,
-            "toplam_gol":toplam_gol,"eslendi":eslesen is not None,
-        }
+        return dict(home=home,away=away,score=scr,ht_score=hts,minute=mn,
+                    comp=comp,country=cntry,sigs=sigs,pri=pri,stats=st_d,
+                    hb=hb,ab=ab,hp=hp,dp=dp,ap=ap,bmo=bmo,tl=tl,tg=tg,
+                    esl=esl is not None)
     except Exception as e:
-        return {
-            "home":"?","away":"?","score":"?","ht_score":"","minute":"?",
-            "competition":"","country":"",
-            "signals":[(f"Hata: {str(e)}","sinyal-low")],"priority":0,
-            "stats":{},"home_baski":0,"away_baski":0,
-            "home_pre":0,"draw_pre":0,"away_pre":0,
-            "bm_oranlar":{},"totals_live":{},"toplam_gol":0,"eslendi":False,
-        }
+        return dict(home="?",away="?",score="?",ht_score="",minute="?",
+                    comp="",country="",sigs=[(f"Hata:{e}","sl2")],pri=0,
+                    stats={},hb=0,ab=0,hp=0,dp=0,ap=0,bmo={},tl={},tg=0,esl=False)
 
-# ── HTML Yardımcıları ─────────────────────────────────────
+def render(d):
+    kls = "mac-karti" + (" sy" if d["pri"]>=3 else " so" if d["pri"]==2 else "")
+    ph,pa=parse_stat(d["stats"].get("possesion")) if d["stats"] else (0,0)
+    sh,sa=parse_stat(d["stats"].get("shots_on_target")) if d["stats"] else (0,0)
+    ah,aa=parse_stat(d["stats"].get("attempts_on_goal")) if d["stats"] else (0,0)
+    ch,ca=parse_stat(d["stats"].get("corners")) if d["stats"] else (0,0)
 
-def stat_renk(h,a,taraf):
-    if taraf=="home": return "ev" if h>a else ("dep" if h<a else "esit")
-    return "ev" if a>h else ("dep" if a<h else "esit")
+    # Kart üst
+    parts = [f'<div class="{kls}">']
+    parts.append(f'<div class="kust"><span class="lig">🔴 {d["comp"]} • {d["country"]}</span><span class="dak">{d["minute"]}</span></div>')
 
-def render_kart(data):
-    priority = data["priority"]
-    kart_cls = "mac-karti"
-    if priority>=3: kart_cls+=" sinyal-yuksek"
-    elif priority==2: kart_cls+=" sinyal-orta"
-
-    s = data["stats"]
-    ph,pa=parse_stat(s.get("possesion")) if s else (0,0)
-    sh,sa=parse_stat(s.get("shots_on_target")) if s else (0,0)
-    ah,aa=parse_stat(s.get("attempts_on_goal")) if s else (0,0)
-    ch,ca=parse_stat(s.get("corners")) if s else (0,0)
-
-    hb = data["home_baski"]
-    ab = data["away_baski"]
-
-    html = f"""
-    <div class="{kart_cls}">
-      <div class="kart-ust">
-        <span class="lig-adi">🔴 {data['competition']} • {data['country']}</span>
-        <span class="dakika-badge">{data['minute']}'</span>
-      </div>
-      <div class="kart-orta">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div style="flex:1">
-            <div class="takim-adi">{data['home']}</div>
-            <div class="takim-adi" style="color:#94a3b8">vs {data['away']}</div>
-          </div>
-          <div style="text-align:right">
-            <div class="skor">{data['score']}</div>
-            {"<div class='iy-skor'>İY: "+data['ht_score']+"</div>" if data['ht_score'] else ""}
-          </div>
-        </div>
-    """
+    # Orta
+    iytxt = f'<div class="iyskor">İY: {d["ht_score"]}</div>' if d["ht_score"] else ""
+    parts.append(f'''<div class="korta">
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+  <div><div class="tadi">{d["home"]}</div><div class="tadi2">vs {d["away"]}</div></div>
+  <div style="text-align:right"><div class="skor">{d["score"]}</div>{iytxt}</div>
+</div>''')
 
     # İstatistik
-    if s:
-        html += f"""
-        <div class="stat-grid">
-          <div class="stat-item">
-            <div class="stat-label">TOP</div>
-            <div class="stat-val">
-              <span class="{stat_renk(ph,pa,'home')}">{ph}%</span>
-              <span style="color:#334155"> – </span>
-              <span class="{stat_renk(ph,pa,'away')}">{pa}%</span>
-            </div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">İSABETLİ ŞUT</div>
-            <div class="stat-val">
-              <span class="{stat_renk(sh,sa,'home')}">{sh}</span>
-              <span style="color:#334155"> – </span>
-              <span class="{stat_renk(sh,sa,'away')}">{sa}</span>
-            </div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">ATAK</div>
-            <div class="stat-val">
-              <span class="{stat_renk(ah,aa,'home')}">{ah}</span>
-              <span style="color:#334155"> – </span>
-              <span class="{stat_renk(ah,aa,'away')}">{aa}</span>
-            </div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">KORNER</div>
-            <div class="stat-val">
-              <span class="{stat_renk(ch,ca,'home')}">{ch}</span>
-              <span style="color:#334155"> – </span>
-              <span class="{stat_renk(ch,ca,'away')}">{ca}</span>
-            </div>
-          </div>
-        </div>
-        <div style="font-size:10px;color:#475569;margin-bottom:2px">
-          Baskı → {data['home'][:12]}: {hb}/100 | {data['away'][:12]}: {ab}/100
-        </div>
-        <div class="baski-bar"><div class="baski-fill" style="width:{hb}%"></div></div>
-        """
-    html += "</div>"  # kart-orta
+    if d["stats"]:
+        parts.append(f'''<div class="sgrid">
+<div class="si"><div class="sl">TOP</div><div class="sv"><span class="{sr(ph,pa,"home")}">{ph}%</span><span style="color:#334155"> – </span><span class="{sr(ph,pa,"away")}">{pa}%</span></div></div>
+<div class="si"><div class="sl">İSABETLİ ŞUT</div><div class="sv"><span class="{sr(sh,sa,"home")}">{sh}</span><span style="color:#334155"> – </span><span class="{sr(sh,sa,"away")}">{sa}</span></div></div>
+<div class="si"><div class="sl">ATAK</div><div class="sv"><span class="{sr(ah,aa,"home")}">{ah}</span><span style="color:#334155"> – </span><span class="{sr(ah,aa,"away")}">{aa}</span></div></div>
+<div class="si"><div class="sl">KORNER</div><div class="sv"><span class="{sr(ch,ca,"home")}">{ch}</span><span style="color:#334155"> – </span><span class="{sr(ch,ca,"away")}">{ca}</span></div></div>
+</div>
+<div class="btext">Baskı → {d["home"][:13]}: {d["hb"]}/100 | {d["away"][:13]}: {d["ab"]}/100</div>
+<div class="bbar"><div class="bfill" style="width:{d["hb"]}%"></div></div>''')
 
-    # Her bookmaker için ayrı oran satırı
-    for bm_key in BOOKMAKERS:
-        bm = data["bm_oranlar"].get(bm_key,{})
-        hl = bm.get("home",0)
-        dl = bm.get("draw",0)
-        al = bm.get("away",0)
-        hc = bm.get("home_chg")
-        dc = bm.get("draw_chg")
-        ac = bm.get("away_chg")
-        etiket = BM_ETIKET.get(bm_key,bm_key)
+    parts.append("</div>")  # korta
 
+    # Bookmaker oranları
+    for bk, betiket in BOOKMAKERS:
+        bm = d["bmo"].get(bk, {})
+        hl = bm.get("home", 0); dl = bm.get("draw", 0); al = bm.get("away", 0)
+        hc = bm.get("hc"); dc = bm.get("dc"); ac = bm.get("ac")
+
+        parts.append(f'<div class="obol"><div class="obas">{betiket} — Canlı</div>')
         if not hl:
-            html += f"""
-            <div class="oran-bolum">
-              <div class="oran-baslik">{etiket}</div>
-              <div style="font-size:11px;color:#334155">Oran yok</div>
-            </div>"""
-            continue
+            parts.append('<div style="font-size:11px;color:#334155;padding-bottom:4px">Oran yok</div>')
+        else:
+            def ok_html(val, chg, lbl):
+                rc = "d" if (chg is not None and chg<=-6) else "y" if (chg is not None and chg>=6) else ""
+                chg_html = ""
+                if chg is not None:
+                    clr = "#22c55e" if chg<0 else "#ef4444"
+                    chg_html = f'<div class="oc" style="color:{clr}">{chg:+.0f}%</div>'
+                return f'<div class="ok {rc}"><div class="ol">{lbl}</div><div class="od {rc}">{val:.2f}</div>{chg_html}</div>'
 
-        def kutu(val,chg,lbl):
-            rc = oran_renk_cls(chg)
-            dc_str = f"<div class='oran-degisim' style='color:{'#22c55e' if chg and chg<0 else '#ef4444' if chg and chg>0 else '#475569'}'>{chg:+.0f}%</div>" if chg is not None else ""
-            return f"""<div class="oran-kutu {rc}">
-              <div class="oran-label">{lbl}</div>
-              <div class="oran-deger {rc}">{val:.2f}</div>
-              {dc_str}
-            </div>"""
-
-        html += f"""
-        <div class="oran-bolum">
-          <div class="oran-baslik">{etiket} — Canlı</div>
-          <div class="oran-grid">
-            {kutu(hl,hc,'1')}
-            {kutu(dl,dc,'X')}
-            {kutu(al,ac,'2')}
-          </div>
-        </div>"""
+            parts.append(f'<div class="ogrid">{ok_html(hl,hc,"1")}{ok_html(dl,dc,"X")}{ok_html(al,ac,"2")}</div>')
+        parts.append("</div>")
 
     # Maç öncesi
-    hp,dp,ap = data["home_pre"],data["draw_pre"],data["away_pre"]
-    if hp or dp or ap:
-        html += f"""
-        <div class="oran-bolum" style="padding-top:6px">
-          <div class="oran-baslik">Maç Öncesi</div>
-          <div class="oran-grid">
-            <div class="oran-kutu"><div class="oran-label">1</div><div class="oran-deger">{hp if hp else '—'}</div></div>
-            <div class="oran-kutu"><div class="oran-label">X</div><div class="oran-deger">{dp if dp else '—'}</div></div>
-            <div class="oran-kutu"><div class="oran-label">2</div><div class="oran-deger">{ap if ap else '—'}</div></div>
-          </div>
-        </div>"""
+    if d["hp"] or d["dp"] or d["ap"]:
+        hp_s = f'{d["hp"]:.2f}' if d["hp"] else "—"
+        dp_s = f'{d["dp"]:.2f}' if d["dp"] else "—"
+        ap_s = f'{d["ap"]:.2f}' if d["ap"] else "—"
+        parts.append(f'''<div class="obol"><div class="obas">Maç Öncesi</div>
+<div class="ogrid">
+<div class="ok"><div class="ol">1</div><div class="od">{hp_s}</div></div>
+<div class="ok"><div class="ol">X</div><div class="od">{dp_s}</div></div>
+<div class="ok"><div class="ol">2</div><div class="od">{ap_s}</div></div>
+</div></div>''')
 
     # Alt/Üst
-    tl = data["totals_live"]
-    tg = data["toplam_gol"]
-    if tl:
-        html += """<div class="oran-bolum"><div class="oran-baslik">Alt / Üst</div><div class="total-grid">"""
-        for cizgi in CIZGILER:
-            gecti = tg > cizgi
+    if d["tl"]:
+        tg = d["tg"]
+        parts.append('<div class="obol"><div class="obas">Alt / Üst</div><div class="tgrid">')
+        for cz in CIZGILER:
+            gecti = tg > cz
             if gecti:
-                html += f"""<div class="total-kutu gecti">
-                  <div class="total-cizgi gecti">✅ {cizgi} Üst</div>
-                  <div style="font-size:11px;color:#22c55e;margin-top:4px">GEÇTİ</div>
-                </div>"""
-            elif cizgi in tl:
-                ov = tl[cizgi].get("over",0)
-                un = tl[cizgi].get("under",0)
-                sicak = ov>0 and ov<=1.50
-                html += f"""<div class="total-kutu {'sicak' if sicak else ''}">
-                  <div class="total-cizgi">{cizgi} Üst</div>
-                  <div class="total-over">Ü {ov:.2f}</div>
-                  <div class="total-under">A {un:.2f}</div>
-                </div>"""
+                parts.append(f'<div class="tk g"><div class="tc g">✅ {cz} Üst</div><div style="font-size:11px;color:#22c55e;margin-top:4px">GEÇTİ</div></div>')
+            elif cz in d["tl"]:
+                ov = d["tl"][cz].get("over", 0)
+                un = d["tl"][cz].get("under", 0)
+                sc = "s" if (ov>0 and ov<=1.50) else ""
+                parts.append(f'<div class="tk {sc}"><div class="tc">{cz} Üst</div><div class="to">Ü {ov:.2f}</div><div class="tu">A {un:.2f}</div></div>')
             else:
-                html += f"""<div class="total-kutu">
-                  <div class="total-cizgi">{cizgi} Üst</div>
-                  <div class="total-under" style="margin-top:8px">—</div>
-                </div>"""
-        html += "</div></div>"
+                parts.append(f'<div class="tk"><div class="tc">{cz} Üst</div><div class="tu" style="margin-top:8px">—</div></div>')
+        parts.append("</div></div>")
 
     # Sinyaller
-    html += '<div class="sinyal-bolum">'
-    for txt,cls in data["signals"]:
-        html += f'<div class="sinyal-item {cls}">{txt}</div>'
-    html += "</div>"
+    parts.append('<div class="sbol">')
+    for txt, cls in d["sigs"]:
+        parts.append(f'<div class="{cls}">{txt}</div>')
+    parts.append("</div>")
 
-    html += "</div>"  # mac-karti
-    return html
+    parts.append("</div>")
+    return "".join(parts)
 
 # ── Ana akış ─────────────────────────────────────────────
 maclar = getir_canli_maclar()
 
 if not maclar:
-    st.markdown("""
-    <div style="text-align:center;padding:60px 20px;color:#475569">
-      <div style="font-size:3rem">⏳</div>
-      <div style="font-family:'Rajdhani',sans-serif;font-size:1.3rem;margin-top:10px">
-        Şu an aktif canlı maç yok
-      </div>
-      <div style="font-size:13px;margin-top:6px">Akşam 18:00–23:00 arası tekrar dene</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;padding:60px;color:#475569"><div style="font-size:3rem">⏳</div><div style="font-family:Rajdhani,sans-serif;font-size:1.3rem;margin-top:10px">Şu an canlı maç yok</div><div style="font-size:13px;margin-top:6px">Akşam 18:00–23:00 arası tekrar dene</div></div>', unsafe_allow_html=True)
 else:
     with st.spinner("Yükleniyor..."):
         odds_dict = getir_odds()
-        veriler   = [sinyal_uret(m,odds_dict) for m in maclar]
+        veriler   = [sinyal_uret(m, odds_dict) for m in maclar]
 
-    veriler.sort(key=lambda x: x["priority"], reverse=True)
-    sinyalli = sum(1 for d in veriler if d["priority"]>=2)
-    eslesmis = sum(1 for d in veriler if d["eslendi"])
+    veriler.sort(key=lambda x: x["pri"], reverse=True)
+    sinyalli = sum(1 for d in veriler if d["pri"]>=2)
+    eslesmis = sum(1 for d in veriler if d["esl"])
 
-    col1,col2,col3 = st.columns(3)
-    with col1: st.metric("🔴 Canlı Maç", len(veriler))
-    with col2: st.metric("🟢 Sinyalli", sinyalli)
-    with col3: st.metric("📊 Oran Eşleşti", eslesmis)
-
+    c1,c2,c3 = st.columns(3)
+    c1.metric("🔴 Canlı Maç", len(veriler))
+    c2.metric("🟢 Sinyalli", sinyalli)
+    c3.metric("📊 Oran Eşleşti", eslesmis)
     st.markdown("<br>", unsafe_allow_html=True)
 
     cols = st.columns(3)
-    for idx, data in enumerate(veriler):
-        with cols[idx%3]:
-            st.markdown(render_kart(data), unsafe_allow_html=True)
+    for i, d in enumerate(veriler):
+        with cols[i%3]:
+            st.markdown(render(d), unsafe_allow_html=True)
 
-col1, col2 = st.columns([1,4])
-with col1:
-    if st.button("🔄 Yenile"):
-        st.cache_data.clear()
-        st.rerun()
-st.markdown("<div style='font-size:11px;color:#1e2d3d;margin-top:8px'>İstatistik 10sn • Oranlar 15sn • livescore-api + the-odds-api</div>", unsafe_allow_html=True)
+if st.button("🔄 Yenile"):
+    st.cache_data.clear()
+    st.rerun()
+st.markdown('<div style="font-size:11px;color:#1e2d3d;margin-top:8px">İstatistik 10sn • Oranlar 15sn • livescore-api + the-odds-api</div>', unsafe_allow_html=True)
