@@ -92,7 +92,7 @@ st.markdown("""
   <span style="font-size:2.2rem">⚽</span>
   <div>
     <div style="font-family:'Rajdhani',sans-serif;font-size:1.7rem;font-weight:700;letter-spacing:3px;color:#fff;line-height:1">CANLI SİNYAL</div>
-    <div style="font-size:10px;color:#3a5070;letter-spacing:2px;margin-top:2px">PINNACLE + BETFAIR • CANLI ORAN & İSTATİSTİK</div>
+    <div style="font-size:10px;color:#3a5070;letter-spacing:2px;margin-top:2px">PINNACLE + UNIBET • CANLI ORAN & İSTATİSTİK</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -103,7 +103,7 @@ ODDS_KEY  = "ac0551df534e175a4f312681465cffcc"
 LS_BASE   = "https://livescore-api.com/api-client"
 ODDS_BASE = "https://api.the-odds-api.com/v4"
 MIN_SINYAL = 15
-BOOKMAKERS = [("pinnacle","Pinnacle"), ("betfair_ex_eu","Betfair")]
+BOOKMAKERS = [("pinnacle","Pinnacle"), ("unibet_eu","Unibet")]
 
 @st.cache_data(ttl=60)
 def getir_canli_maclar():
@@ -132,11 +132,11 @@ def getir_stats(match_id):
 def getir_odds():
     """
     Pinnacle: h2h + totals (dinamik çizgiler)
-    Betfair:  h2h only
+    Unibet:  h2h only
     """
     url = (f"{ODDS_BASE}/sports/soccer/odds/"
            f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
-           f"&bookmakers=pinnacle,betfair_ex_eu")
+           f"&bookmakers=pinnacle,unibet_eu")
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code != 200: return {}
@@ -351,23 +351,23 @@ def render(d):
 <span class="btext">{d["ab"]}/100 {d["away"][:12]}</span>
 </div>''')
 
-    # Pinnacle + Betfair 1X2 karşılaştırmalı
+    # Pinnacle + Unibet 1X2 karşılaştırmalı
     p.append('<div class="ayrac"></div><div class="bbol">')
     p.append('<div class="bbas">1X2 — Canlı Oranlar</div>')
     p.append('<div class="ogrid3">')
     p.append(f'<div class="ok" style="background:#06080d;border-color:#0f1a2a"><div class="ol">—</div><div class="od" style="font-size:10px;color:#22c55e">Pinnacle</div></div>')
-    p.append(f'<div class="ok" style="background:#06080d;border-color:#0f1a2a"><div class="ol">—</div><div class="od" style="font-size:10px;color:#f97316">Betfair</div></div>')
+    p.append(f'<div class="ok" style="background:#06080d;border-color:#0f1a2a"><div class="ol">—</div><div class="od" style="font-size:10px;color:#f97316">Unibet</div></div>')
     p.append(f'<div class="ok" style="background:#06080d;border-color:#0f1a2a"><div class="ol">—</div><div class="od" style="font-size:10px;color:#64748b">Öncesi</div></div>')
     p.append('</div>')
 
     for lbl, idx in [("1","home"),("X","draw"),("2","away")]:
         pv = d["bmo"].get("pinnacle",{}).get(idx,0)
-        bv = d["bmo"].get("betfair_ex_eu",{}).get(idx,0)
+        bv = d["bmo"].get("unibet_eu",{}).get(idx,0)
         pc_ = d["bmo"].get("pinnacle",{}).get(f"{idx[0]}c" if idx!="draw" else "dc", None)
         # fix: get correct chg key
         chg_map = {"home":"hc","draw":"dc","away":"ac"}
         pc_ = d["bmo"].get("pinnacle",{}).get(chg_map[idx], None)
-        bc_ = d["bmo"].get("betfair_ex_eu",{}).get(chg_map[idx], None)
+        bc_ = d["bmo"].get("unibet_eu",{}).get(chg_map[idx], None)
         pre = d["hp"] if idx=="home" else (d["dp"] if idx=="draw" else d["ap"])
 
         prc = "d" if (pc_ and pc_<=-6) else "y" if (pc_ and pc_>=6) else ""
@@ -377,7 +377,7 @@ def render(d):
 
         p.append(f'<div class="ogrid3" style="margin-top:4px">')
         p.append(f'<div class="ok {prc}"><div class="ol">{lbl} — PIN</div><div class="od {prc}">{pv:.2f if pv else "—"}</div>{pc_txt}</div>')
-        p.append(f'<div class="ok {brc}"><div class="ol">{lbl} — BF</div><div class="od {brc}">{bv:.2f if bv else "—"}</div>{bc_txt}</div>')
+        p.append(f'<div class="ok {brc}"><div class="ol">{lbl} — UN</div><div class="od {brc}">{bv:.2f if bv else "—"}</div>{bc_txt}</div>')
         p.append(f'<div class="ok"><div class="ol">{lbl} — Öncesi</div><div class="od">{pre:.2f if pre else "—"}</div></div>')
         p.append('</div>')
 
@@ -436,4 +436,4 @@ else:
 if st.button("🔄 Yenile"):
     st.cache_data.clear()
     st.rerun()
-st.markdown('<div style="font-size:10px;color:#1a2535;margin-top:8px">İstatistik 10sn • Oranlar 15sn • livescore-api + the-odds-api (Pinnacle+Betfair)</div>', unsafe_allow_html=True)
+st.markdown('<div style="font-size:10px;color:#1a2535;margin-top:8px">İstatistik 10sn • Oranlar 15sn • livescore-api + the-odds-api (Pinnacle+Unibet)</div>', unsafe_allow_html=True)
