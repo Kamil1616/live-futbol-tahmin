@@ -131,47 +131,86 @@ def getir_stats(match_id):
 @st.cache_data(ttl=15)
 def getir_odds():
     """
-    Pinnacle: h2h + totals (dinamik çizgiler)
-    Matchbook:  h2h only
+    Pinnacle + Matchbook: h2h
+    Tüm bookmaker'lar: totals (0.5/1.5/2.5 çizgileri için ortalama)
     """
-    url = (f"{ODDS_BASE}/sports/soccer/odds/"
-           f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
-           f"&bookmakers=pinnacle,matchbook")
+    sonuc = {}
+    HEDEF_CIZGILER = [0.5, 1.5, 2.5]
+
+    # 1) Pinnacle + Matchbook h2h + kendi totals
+    url1 = (f"{ODDS_BASE}/sports/soccer/odds/"
+            f"?apiKey={ODDS_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal"
+            f"&bookmakers=pinnacle,matchbook")
     try:
-        resp = requests.get(url, timeout=10)
-        if resp.status_code != 200: return {}
-        sonuc = {}
-        for mac in resp.json():
-            ht = mac.get("home_team",""); at = mac.get("away_team","")
-            mac_data = {}
-            for bm in (mac.get("bookmakers") or []):
-                bk = bm.get("key","")
-                if bk not in [b[0] for b in BOOKMAKERS]: continue
-                h2h = {"home":0,"draw":0,"away":0}
-                tots = {}  # { point: {"over":x,"under":x} }
-                for mkt in (bm.get("markets") or []):
-                    mk = mkt.get("key")
-                    if mk == "h2h":
-                        for o in (mkt.get("outcomes") or []):
-                            nm=o.get("name",""); pr=float(o.get("price") or 0)
-                            if pr<=0 or pr>500: continue
-                            if nm==ht: h2h["home"]=pr
-                            elif nm==at: h2h["away"]=pr
-                            elif nm=="Draw": h2h["draw"]=pr
-                    elif mk == "totals":
+        resp = requests.get(url1, timeout=10)
+        if resp.status_code == 200:
+            for mac in resp.json():
+                ht = mac.get("home_team",""); at = mac.get("away_team","")
+                mac_data = {}
+                for bm in (mac.get("bookmakers") or []):
+                    bk = bm.get("key","")
+                    if bk not in [b[0] for b in BOOKMAKERS]: continue
+                    h2h = {"home":0,"draw":0,"away":0}
+                    tots = {}
+                    for mkt in (bm.get("markets") or []):
+                        mk = mkt.get("key")
+                        if mk == "h2h":
+                            for o in (mkt.get("outcomes") or []):
+                                nm=o.get("name",""); pr=float(o.get("price") or 0)
+                                if pr<=0 or pr>500: continue
+                                if nm==ht: h2h["home"]=pr
+                                elif nm==at: h2h["away"]=pr
+                                elif nm=="Draw": h2h["draw"]=pr
+                        elif mk == "totals":
+                            for o in (mkt.get("outcomes") or []):
+                                nm=o.get("name",""); pt=o.get("point"); pr=float(o.get("price") or 0)
+                                if pt is None or pr<=0: continue
+                                pt=float(pt)
+                                if pt not in tots: tots[pt]={"over":0,"under":0}
+                                if nm=="Over": tots[pt]["over"]=pr
+                                elif nm=="Under": tots[pt]["under"]=pr
+                    if h2h["home"] or tots:
+                        mac_data[bk] = {"h2h":h2h,"totals":tots}
+                if mac_data:
+                    sonuc[f"{ht}|{at}"] = mac_data
+    except: pass
+
+    # 2) Tüm bookmaker'lardan 0.5/1.5/2.5 totals topla (ortalama)
+    url2 = (f"{ODDS_BASE}/sports/soccer/odds/"
+            f"?apiKey={ODDS_KEY}&regions=eu&markets=totals&oddsFormat=decimal")
+    try:
+        resp = requests.get(url2, timeout=10)
+        if resp.status_code == 200:
+            for mac in resp.json():
+                ht = mac.get("home_team",""); at = mac.get("away_team","")
+                anahtar = f"{ht}|{at}"
+                over_prices = {0.5:[], 1.5:[], 2.5:[]}
+                under_prices = {0.5:[], 1.5:[], 2.5:[]}
+                for bm in (mac.get("bookmakers") or []):
+                    for mkt in (bm.get("markets") or []):
+                        if mkt.get("key") != "totals": continue
                         for o in (mkt.get("outcomes") or []):
                             nm=o.get("name",""); pt=o.get("point"); pr=float(o.get("price") or 0)
                             if pt is None or pr<=0: continue
                             pt=float(pt)
-                            if pt not in tots: tots[pt]={"over":0,"under":0}
-                            if nm=="Over": tots[pt]["over"]=pr
-                            elif nm=="Under": tots[pt]["under"]=pr
-                if h2h["home"] or tots:
-                    mac_data[bk] = {"h2h":h2h,"totals":tots}
-            if mac_data:
-                sonuc[f"{ht}|{at}"] = mac_data
-        return sonuc
-    except: return {}
+                            if pt not in HEDEF_CIZGILER: continue
+                            if nm=="Over": over_prices[pt].append(pr)
+                            elif nm=="Under": under_prices[pt].append(pr)
+                # Ortalama hesapla
+                avg_tots = {}
+                for cz in HEDEF_CIZGILER:
+                    if over_prices[cz] and under_prices[cz]:
+                        avg_tots[cz] = {
+                            "over":  round(sum(over_prices[cz])/len(over_prices[cz]),2),
+                            "under": round(sum(under_prices[cz])/len(under_prices[cz]),2),
+                        }
+                if avg_tots:
+                    if anahtar not in sonuc:
+                        sonuc[anahtar] = {}
+                    sonuc[anahtar]["avg_totals"] = avg_tots
+    except: pass
+
+    return sonuc
 
 def benzerlik(a,b): return SequenceMatcher(None,a.lower(),b.lower()).ratio()
 
@@ -239,7 +278,8 @@ def sinyal_uret(match, od):
         # Pinnacle ref
         pin=bmo.get("pinnacle",{})
         hc=pin.get("hc"); ac_=pin.get("ac")
-        tl=pin.get("totals") or {}
+        # Önce tüm bookmaker ortalaması (0.5/1.5/2.5), yoksa Pinnacle dinamik
+        tl=(esl or {}).get("avg_totals") or pin.get("totals") or {}
 
         mint=parse_min(mn)
         st_d=getir_stats(mid) if mid else {}
@@ -301,9 +341,11 @@ def sinyal_uret(match, od):
 
             if not sigs: sigs.append(("Sinyal yok","sl2"))
 
+        avg_tl = (esl or {}).get("avg_totals") or {}
         return dict(home=home,away=away,score=scr,ht_score=hts,minute=mn,
                     comp=comp,country=cntry,sigs=sigs,pri=pri,stats=st_d,
-                    hb=hb,ab=ab,hp=hp,dp=dp,ap=ap,bmo=bmo,tl=tl,tg=tg,esl=esl is not None)
+                    hb=hb,ab=ab,hp=hp,dp=dp,ap=ap,bmo=bmo,tl=tl,tg=tg,
+                    avg_tl=avg_tl,esl=esl is not None)
     except Exception as e:
         return dict(home="?",away="?",score="?",ht_score="",minute="?",comp="",country="",
                     sigs=[(f"Hata:{e}","sl2")],pri=0,stats={},hb=0,ab=0,hp=0,dp=0,ap=0,
@@ -394,26 +436,26 @@ def render(d):
 
     p.append('</div>')  # bbol
 
-    # Alt/Üst — Pinnacle + Matchbook karşılaştırmalı
-    pin_tl = d["tl"]  # Pinnacle totals
-    mb_tl  = d["bmo"].get("matchbook",{}).get("totals",{})
-    tum_cizgiler = sorted(set(list(pin_tl.keys()) + list(mb_tl.keys())))
+    # Alt/Üst — Pinnacle + Piyasa Ortalaması karşılaştırmalı
+    pin_tl = d["bmo"].get("pinnacle",{}).get("totals",{})  # Pinnacle dinamik
+    avg_tl = d.get("avg_tl",{})  # Tüm bookmaker ortalaması (0.5/1.5/2.5)
+    tum_cizgiler = sorted(set(list(pin_tl.keys()) + list(avg_tl.keys())))
     if tum_cizgiler:
         p.append('<div class="ayrac"></div><div class="bbol">')
-        p.append('<div class="bbas">Alt / Üst — Pinnacle vs Matchbook</div>')
-        p.append('<table class="total-tablo"><thead><tr><th style="text-align:left">Çizgi</th><th>PIN Üst</th><th>MB Üst</th><th>Durum</th></tr></thead><tbody>')
+        p.append('<div class="bbas">Alt / Üst — Pinnacle vs Piyasa Ort.</div>')
+        p.append('<table class="total-tablo"><thead><tr><th style="text-align:left">Çizgi</th><th>Pinnacle</th><th>Piyasa Ort.</th><th>Durum</th></tr></thead><tbody>')
         for cz in tum_cizgiler:
             gecti = d["tg"] > cz
             pin_ov = pin_tl.get(cz,{}).get("over",0)
-            mb_ov  = mb_tl.get(cz,{}).get("over",0)
+            avg_ov = avg_tl.get(cz,{}).get("over",0)
             if gecti:
                 p.append(f'<tr><td class="cizgi gecti">✅ {cz}</td><td class="oran gecti">GEÇTİ</td><td class="oran gecti">GEÇTİ</td><td class="gecti">✓</td></tr>')
             else:
                 pin_cls = "sicak" if pin_ov and pin_ov<=1.50 else ("dusuk" if pin_ov and pin_ov<=1.70 else "")
-                mb_cls  = "sicak" if mb_ov  and mb_ov<=1.50  else ("dusuk" if mb_ov  and mb_ov<=1.70  else "")
+                avg_cls = "sicak" if avg_ov and avg_ov<=1.50 else ("dusuk" if avg_ov and avg_ov<=1.70 else "")
                 pin_str = f"{pin_ov:.2f}" if pin_ov else "—"
-                mb_str  = f"{mb_ov:.2f}"  if mb_ov  else "—"
-                p.append(f'<tr><td class="cizgi">{cz} Üst</td><td class="oran {pin_cls}">{pin_str}</td><td class="oran {mb_cls}">{mb_str}</td><td style="font-size:10px;color:#3a5070">Açık</td></tr>')
+                avg_str = f"{avg_ov:.2f}" if avg_ov else "—"
+                p.append(f'<tr><td class="cizgi">{cz} Üst</td><td class="oran {pin_cls}">{pin_str}</td><td class="oran {avg_cls}">{avg_str}</td><td style="font-size:10px;color:#3a5070">Açık</td></tr>')
         p.append('</tbody></table></div>')
 
     # Sinyaller
