@@ -394,20 +394,26 @@ def render(d):
 
     p.append('</div>')  # bbol
 
-    # Alt/Üst (Pinnacle dinamik çizgiler)
-    if d["tl"]:
+    # Alt/Üst — Pinnacle + Matchbook karşılaştırmalı
+    pin_tl = d["tl"]  # Pinnacle totals
+    mb_tl  = d["bmo"].get("matchbook",{}).get("totals",{})
+    tum_cizgiler = sorted(set(list(pin_tl.keys()) + list(mb_tl.keys())))
+    if tum_cizgiler:
         p.append('<div class="ayrac"></div><div class="bbol">')
-        p.append('<div class="bbas">Alt / Üst — Pinnacle</div>')
-        p.append('<table class="total-tablo"><thead><tr><th style="text-align:left">Çizgi</th><th>Üst</th><th>Alt</th><th>Durum</th></tr></thead><tbody>')
-        for cz in sorted(d["tl"].keys()):
-            ov = d["tl"][cz].get("over",0)
-            un = d["tl"][cz].get("under",0)
+        p.append('<div class="bbas">Alt / Üst — Pinnacle vs Matchbook</div>')
+        p.append('<table class="total-tablo"><thead><tr><th style="text-align:left">Çizgi</th><th>PIN Üst</th><th>MB Üst</th><th>Durum</th></tr></thead><tbody>')
+        for cz in tum_cizgiler:
             gecti = d["tg"] > cz
+            pin_ov = pin_tl.get(cz,{}).get("over",0)
+            mb_ov  = mb_tl.get(cz,{}).get("over",0)
             if gecti:
-                p.append(f'<tr><td class="cizgi gecti">✅ {cz}</td><td class="oran gecti">GEÇTİ</td><td>—</td><td class="gecti">✓</td></tr>')
+                p.append(f'<tr><td class="cizgi gecti">✅ {cz}</td><td class="oran gecti">GEÇTİ</td><td class="oran gecti">GEÇTİ</td><td class="gecti">✓</td></tr>')
             else:
-                oc = "sicak" if ov<=1.50 else ("dusuk" if ov<=1.70 else "")
-                p.append(f'<tr><td class="cizgi">{cz} Üst</td><td class="oran {oc}">{ov:.2f}</td><td class="oran">{un:.2f}</td><td style="font-size:10px;color:#3a5070">Açık</td></tr>')
+                pin_cls = "sicak" if pin_ov and pin_ov<=1.50 else ("dusuk" if pin_ov and pin_ov<=1.70 else "")
+                mb_cls  = "sicak" if mb_ov  and mb_ov<=1.50  else ("dusuk" if mb_ov  and mb_ov<=1.70  else "")
+                pin_str = f"{pin_ov:.2f}" if pin_ov else "—"
+                mb_str  = f"{mb_ov:.2f}"  if mb_ov  else "—"
+                p.append(f'<tr><td class="cizgi">{cz} Üst</td><td class="oran {pin_cls}">{pin_str}</td><td class="oran {mb_cls}">{mb_str}</td><td style="font-size:10px;color:#3a5070">Açık</td></tr>')
         p.append('</tbody></table></div>')
 
     # Sinyaller
