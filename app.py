@@ -375,10 +375,13 @@ def render(d):
         pc_txt = f'<div class="oc" style="color:{"#22c55e" if pc_ and pc_<0 else "#ef4444"}">{pc_:+.0f}%</div>' if pc_ is not None else ""
         bc_txt = f'<div class="oc" style="color:{"#22c55e" if bc_ and bc_<0 else "#ef4444"}">{bc_:+.0f}%</div>' if bc_ is not None else ""
 
+        pv_str = f"{pv:.2f}" if pv else "—"
+        bv_str = f"{bv:.2f}" if bv else "—"
+        pre_str = f"{pre:.2f}" if pre else "—"
         p.append(f'<div class="ogrid3" style="margin-top:4px">')
-        p.append(f'<div class="ok {prc}"><div class="ol">{lbl} — PIN</div><div class="od {prc}">{pv:.2f if pv else "—"}</div>{pc_txt}</div>')
-        p.append(f'<div class="ok {brc}"><div class="ol">{lbl} — UN</div><div class="od {brc}">{bv:.2f if bv else "—"}</div>{bc_txt}</div>')
-        p.append(f'<div class="ok"><div class="ol">{lbl} — Öncesi</div><div class="od">{pre:.2f if pre else "—"}</div></div>')
+        p.append(f'<div class="ok {prc}"><div class="ol">{lbl} — PIN</div><div class="od {prc}">{pv_str}</div>{pc_txt}</div>')
+        p.append(f'<div class="ok {brc}"><div class="ol">{lbl} — UN</div><div class="od {brc}">{bv_str}</div>{bc_txt}</div>')
+        p.append(f'<div class="ok"><div class="ol">{lbl} — Öncesi</div><div class="od">{pre_str}</div></div>')
         p.append('</div>')
 
     p.append('</div>')  # bbol
